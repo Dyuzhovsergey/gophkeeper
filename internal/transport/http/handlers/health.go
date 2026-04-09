@@ -1,3 +1,4 @@
+// Package handlers предоставляет обработчики приложения
 package handlers
 
 import (
