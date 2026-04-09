@@ -11,8 +11,7 @@ import (
 
 // Init создаёт и возвращает новый экземпляр логгера.
 //
-// На текущем этапе используется production-настройка zap.
-// Уровень логирования передаётся строкой, например:
+// Уровень логирования передаётся строкой:
 // "debug", "info", "warn", "error".
 func Init(level string) (*zap.Logger, error) {
 	parsedLevel, err := parseLevel(level)
