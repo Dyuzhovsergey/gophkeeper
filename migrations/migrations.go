@@ -8,7 +8,6 @@ import (
 )
 
 // Run применяет idempotent-миграции схемы базы данных.
-// Функцию безопасно вызывать при каждом старте сервиса.
 func Run(ctx context.Context, db *sql.DB) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
