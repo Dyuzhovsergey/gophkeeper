@@ -11,8 +11,9 @@ import (
 const (
 	defaultServerRunAddress = "localhost:8080"
 
-	envServerRunAddress = "GOPHKEEPER_SERVER_RUN_ADDRESS"
-	envServerLogLevel   = "GOPHKEEPER_SERVER_LOG_LEVEL"
+	envServerRunAddress  = "GOPHKEEPER_SERVER_RUN_ADDRESS"
+	envServerLogLevel    = "GOPHKEEPER_SERVER_LOG_LEVEL"
+	envServerDatabaseDSN = "GOPHKEEPER_SERVER_DATABASE_DSN"
 )
 
 // ServerConfig описывает конфигурацию серверного приложения.
@@ -22,13 +23,17 @@ type ServerConfig struct {
 
 	// LogLevel — уровень логирования.
 	LogLevel string
+
+	// DatabaseDSN — строка подключения к PostgreSQL.
+	DatabaseDSN string
 }
 
 // DefaultServerConfig возвращает серверную конфигурацию по умолчанию.
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		RunAddress: defaultServerRunAddress,
-		LogLevel:   defaultLogLevel,
+		RunAddress:  defaultServerRunAddress,
+		LogLevel:    defaultLogLevel,
+		DatabaseDSN: "",
 	}
 }
 
@@ -46,6 +51,7 @@ func LoadServer(args []string) (ServerConfig, error) {
 
 	fs.StringVar(&cfg.RunAddress, "a", cfg.RunAddress, "HTTP server listen address")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "logger level")
+	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL DSN")
 
 	if err := fs.Parse(args); err != nil {
 		return ServerConfig{}, err
@@ -53,9 +59,11 @@ func LoadServer(args []string) (ServerConfig, error) {
 
 	applyStringEnv(&cfg.RunAddress, envServerRunAddress)
 	applyStringEnv(&cfg.LogLevel, envServerLogLevel)
+	applyStringEnv(&cfg.DatabaseDSN, envServerDatabaseDSN)
 
 	cfg.RunAddress = strings.TrimSpace(cfg.RunAddress)
 	cfg.LogLevel = normalizeLogLevel(cfg.LogLevel)
+	cfg.DatabaseDSN = strings.TrimSpace(cfg.DatabaseDSN)
 
 	if err := cfg.Validate(); err != nil {
 		return ServerConfig{}, err
@@ -72,6 +80,10 @@ func (c ServerConfig) Validate() error {
 
 	if strings.TrimSpace(c.LogLevel) == "" {
 		return fmt.Errorf("server log level is empty")
+	}
+
+	if strings.TrimSpace(c.DatabaseDSN) == "" {
+		return fmt.Errorf("server database dsn is empty")
 	}
 
 	return nil
