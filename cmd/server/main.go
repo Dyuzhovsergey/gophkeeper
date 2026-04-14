@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -8,24 +11,53 @@ import (
 	"github.com/Dyuzhovsergey/gophkeeper/internal/config"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/logger"
 	httptransport "github.com/Dyuzhovsergey/gophkeeper/internal/transport/http"
+	"github.com/Dyuzhovsergey/gophkeeper/migrations"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
 func main() {
+	if err := run(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	ctx := context.Background()
+
 	cfg, err := config.LoadServer(os.Args[1:])
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "load server config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("load server config: %w", err)
 	}
 
 	log, err := logger.Init(cfg.LogLevel)
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "init logger: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("init logger: %w", err)
 	}
 	defer func() {
 		_ = log.Sync()
 	}()
+
+	db, err := sql.Open("pgx", cfg.DatabaseDSN)
+	if err != nil {
+		return fmt.Errorf("open postgres connection: %w", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping postgres: %w", err)
+	}
+
+	log.Info("postgres connected")
+
+	if err := migrations.Run(ctx, db); err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	log.Info("migrations applied")
 
 	router := httptransport.NewRouter()
 
@@ -39,7 +71,9 @@ func main() {
 		zap.String("addr", cfg.RunAddress),
 	)
 
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal("server stopped", zap.Error(err))
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("listen and serve: %w", err)
 	}
+
+	return nil
 }
