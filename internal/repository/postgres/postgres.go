@@ -1,15 +1,31 @@
 // Package postgres содержит PostgreSQL-реализации репозиториев.
 package postgres
 
-import "database/sql"
+import (
+	"database/sql"
 
-// Repository хранит общее подключение к PostgreSQL
-// и служит базовым каркасом для следующих репозиториев.
-type Repository struct {
+	repo "github.com/Dyuzhovsergey/gophkeeper/internal/repository"
+)
+
+// UsersRepository реализует UserRepository поверх PostgreSQL.
+type UsersRepository struct {
 	db *sql.DB
 }
 
-// New создаёт базовый PostgreSQL-репозиторий.
-func New(db *sql.DB) *Repository {
-	return &Repository{db: db}
+// SessionsRepository реализует SessionRepository поверх PostgreSQL.
+type SessionsRepository struct {
+	db *sql.DB
 }
+
+// NewUsersRepository создаёт репозиторий пользователей.
+func NewUsersRepository(db *sql.DB) *UsersRepository {
+	return &UsersRepository{db: db}
+}
+
+// NewSessionsRepository создаёт репозиторий сессий.
+func NewSessionsRepository(db *sql.DB) *SessionsRepository {
+	return &SessionsRepository{db: db}
+}
+
+var _ repo.UserRepository = (*UsersRepository)(nil)
+var _ repo.SessionRepository = (*SessionsRepository)(nil)
