@@ -34,6 +34,5 @@ func (u User) Validate() error {
 	if strings.TrimSpace(u.PasswordHash) == "" {
 		return fmt.Errorf("user password hash is empty")
 	}
-
 	return nil
 }
