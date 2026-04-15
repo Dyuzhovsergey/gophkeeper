@@ -1,3 +1,4 @@
+// Package security предоставляет хэширование паролей и выпуск/проверку токенов доступа.
 package security
 
 import (
