@@ -9,6 +9,15 @@ var (
 	// ErrUserAlreadyExists означает, что пользователь с таким логином уже существует.
 	ErrUserAlreadyExists = errors.New("user already exists")
 
+	// ErrInvalidCredentials означает, что переданы неверные учётные данные.
+	ErrInvalidCredentials = errors.New("invalid credentials")
+
+	// ErrUnauthorized означает, что пользователь не авторизован.
+	ErrUnauthorized = errors.New("unauthorized")
+
+	// ErrSessionExpired означает, что срок действия сессии истёк.
+	ErrSessionExpired = errors.New("session expired")
+
 	// ErrSessionNotFound означает, что сессия не найдена.
 	ErrSessionNotFound = errors.New("session not found")
 
