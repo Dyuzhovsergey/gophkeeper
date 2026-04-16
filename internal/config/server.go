@@ -94,5 +94,9 @@ func (c ServerConfig) Validate() error {
 		return fmt.Errorf("server database dsn is empty")
 	}
 
+	if strings.TrimSpace(c.JWTSecret) == "" {
+		return fmt.Errorf("server jwt secret is empty")
+	}
+
 	return nil
 }
