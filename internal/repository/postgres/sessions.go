@@ -15,11 +15,10 @@ func (r *SessionsRepository) Create(ctx context.Context, session *domain.Session
 		INSERT INTO sessions (
 			id,
 			user_id,
-			token,
 			expires_at,
 			created_at
 		)
-		VALUES ($1, $2, $3, $4, $5);
+		VALUES ($1, $2, $3, $4);
 	`
 
 	_, err := r.db.ExecContext(
@@ -27,7 +26,6 @@ func (r *SessionsRepository) Create(ctx context.Context, session *domain.Session
 		query,
 		session.ID,
 		session.UserID,
-		session.Token,
 		session.ExpiresAt,
 		session.CreatedAt,
 	)
@@ -38,20 +36,19 @@ func (r *SessionsRepository) Create(ctx context.Context, session *domain.Session
 	return nil
 }
 
-// GetByToken возвращает сессию по токену.
-func (r *SessionsRepository) GetByToken(ctx context.Context, token string) (*domain.Session, error) {
+// GetByID возвращает сессию по идентификатору.
+func (r *SessionsRepository) GetByID(ctx context.Context, id string) (*domain.Session, error) {
 	const query = `
-		SELECT id, user_id, token, expires_at, created_at
+		SELECT id, user_id, expires_at, created_at
 		FROM sessions
-		WHERE token = $1;
+		WHERE id = $1;
 	`
 
 	var session domain.Session
 
-	err := r.db.QueryRowContext(ctx, query, token).Scan(
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&session.ID,
 		&session.UserID,
-		&session.Token,
 		&session.ExpiresAt,
 		&session.CreatedAt,
 	)
@@ -60,27 +57,27 @@ func (r *SessionsRepository) GetByToken(ctx context.Context, token string) (*dom
 			return nil, domain.ErrSessionNotFound
 		}
 
-		return nil, fmt.Errorf("select session by token: %w", err)
+		return nil, fmt.Errorf("select session by id: %w", err)
 	}
 
 	return &session, nil
 }
 
-// DeleteByToken удаляет сессию по токену.
-func (r *SessionsRepository) DeleteByToken(ctx context.Context, token string) error {
+// DeleteByID удаляет сессию по идентификатору.
+func (r *SessionsRepository) DeleteByID(ctx context.Context, id string) error {
 	const query = `
 		DELETE FROM sessions
-		WHERE token = $1;
+		WHERE id = $1;
 	`
 
-	result, err := r.db.ExecContext(ctx, query, token)
+	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
-		return fmt.Errorf("delete session by token: %w", err)
+		return fmt.Errorf("delete session by id: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("get affected rows after delete session by token: %w", err)
+		return fmt.Errorf("get affected rows after delete session by id: %w", err)
 	}
 
 	if rowsAffected == 0 {
