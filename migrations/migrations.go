@@ -42,7 +42,6 @@ func Run(ctx context.Context, db *sql.DB) error {
 				CREATE TABLE IF NOT EXISTS sessions (
 					id TEXT PRIMARY KEY,
 					user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-					token TEXT NOT NULL UNIQUE,
 					expires_at TIMESTAMPTZ NOT NULL,
 					created_at TIMESTAMPTZ NOT NULL
 				);
