@@ -48,6 +48,13 @@ func Run(ctx context.Context, db *sql.DB) error {
 			`,
 		},
 		{
+			name: "drop legacy sessions token column",
+			query: `
+				ALTER TABLE sessions
+				DROP COLUMN IF EXISTS token;
+			`,
+		},
+		{
 			name: "create secrets table",
 			query: `
 				CREATE TABLE IF NOT EXISTS secrets (
