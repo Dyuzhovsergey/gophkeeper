@@ -2,42 +2,115 @@
 package security
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
+	"strings"
+	"time"
+
+	jwt "github.com/golang-jwt/jwt/v5"
 )
 
-// TokenGenerator описывает генерацию токенов доступа.
-type TokenGenerator interface {
-	// Generate создаёт новый токен.
-	Generate() (string, error)
+// TokenManager описывает выпуск и проверку токенов доступа.
+type TokenManager interface {
+	// Generate создаёт новый JWT для пользователя и сессии.
+	Generate(userID, sessionID string, expiresAt time.Time) (string, error)
+
+	// Parse проверяет JWT и возвращает claims.
+	Parse(tokenString string) (*TokenClaims, error)
 }
 
-// RandomTokenGenerator генерирует случайные токены.
-type RandomTokenGenerator struct {
-	size int
+// TokenClaims описывает claims токена доступа.
+type TokenClaims struct {
+	jwt.RegisteredClaims
 }
 
-const defaultTokenSize = 32
+// JWTManager реализует TokenManager через JWT HS256.
+type JWTManager struct {
+	secret []byte
+}
 
-// NewRandomTokenGenerator создаёт генератор случайных токенов.
-func NewRandomTokenGenerator(size int) *RandomTokenGenerator {
-	if size <= 0 {
-		size = defaultTokenSize
+// NewJWTManager создаёт JWT-менеджер.
+func NewJWTManager(secret string) *JWTManager {
+	return &JWTManager{
+		secret: []byte(secret),
+	}
+}
+
+// Generate создаёт новый JWT для пользователя и сессии.
+func (m *JWTManager) Generate(userID, sessionID string, expiresAt time.Time) (string, error) {
+	if strings.TrimSpace(userID) == "" {
+		return "", fmt.Errorf("user id is empty")
 	}
 
-	return &RandomTokenGenerator{size: size}
-}
-
-// Generate создаёт новый случайный токен.
-func (g *RandomTokenGenerator) Generate() (string, error) {
-	buf := make([]byte, g.size)
-
-	if _, err := rand.Read(buf); err != nil {
-		return "", fmt.Errorf("generate random token bytes: %w", err)
+	if strings.TrimSpace(sessionID) == "" {
+		return "", fmt.Errorf("session id is empty")
 	}
 
-	return base64.RawURLEncoding.EncodeToString(buf), nil
+	if len(m.secret) == 0 {
+		return "", fmt.Errorf("jwt secret is empty")
+	}
+
+	now := time.Now().UTC()
+
+	claims := TokenClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID,
+			ID:        sessionID,
+			ExpiresAt: jwt.NewNumericDate(expiresAt.UTC()),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	signedToken, err := token.SignedString(m.secret)
+	if err != nil {
+		return "", fmt.Errorf("sign jwt token: %w", err)
+	}
+
+	return signedToken, nil
 }
 
-var _ TokenGenerator = (*RandomTokenGenerator)(nil)
+// Parse проверяет JWT и возвращает claims.
+func (m *JWTManager) Parse(tokenString string) (*TokenClaims, error) {
+	if strings.TrimSpace(tokenString) == "" {
+		return nil, fmt.Errorf("jwt token is empty")
+	}
+
+	if len(m.secret) == 0 {
+		return nil, fmt.Errorf("jwt secret is empty")
+	}
+
+	claims := &TokenClaims{}
+
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		claims,
+		func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+
+			return m.secret, nil
+		},
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parse jwt token: %w", err)
+	}
+
+	if !token.Valid {
+		return nil, fmt.Errorf("jwt token is invalid")
+	}
+
+	if strings.TrimSpace(claims.Subject) == "" {
+		return nil, fmt.Errorf("jwt subject is empty")
+	}
+
+	if strings.TrimSpace(claims.ID) == "" {
+		return nil, fmt.Errorf("jwt jti is empty")
+	}
+
+	return claims, nil
+}
+
+var _ TokenManager = (*JWTManager)(nil)

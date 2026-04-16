@@ -15,6 +15,9 @@ var (
 	// ErrUnauthorized означает, что пользователь не авторизован.
 	ErrUnauthorized = errors.New("unauthorized")
 
+	// ErrInvalidToken означает, что токен некорректен.
+	ErrInvalidToken = errors.New("invalid token")
+
 	// ErrSessionExpired означает, что срок действия сессии истёк.
 	ErrSessionExpired = errors.New("session expired")
 

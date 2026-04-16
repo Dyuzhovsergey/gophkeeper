@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Session описывает пользовательскую сессию или токен доступа.
+// Session описывает пользовательскую сессию.
 type Session struct {
 	// ID — уникальный идентификатор сессии.
 	ID string
@@ -14,10 +14,7 @@ type Session struct {
 	// UserID — идентификатор владельца сессии.
 	UserID string
 
-	// Token — токен доступа.
-	Token string
-
-	// ExpiresAt — время истечения срока действия токена.
+	// ExpiresAt — время истечения срока действия сессии.
 	ExpiresAt time.Time
 
 	// CreatedAt — время создания сессии.
@@ -26,12 +23,12 @@ type Session struct {
 
 // Validate проверяет корректность сессии.
 func (s Session) Validate() error {
-	if strings.TrimSpace(s.UserID) == "" {
-		return fmt.Errorf("session user id is empty")
+	if strings.TrimSpace(s.ID) == "" {
+		return fmt.Errorf("session id is empty")
 	}
 
-	if strings.TrimSpace(s.Token) == "" {
-		return fmt.Errorf("session token is empty")
+	if strings.TrimSpace(s.UserID) == "" {
+		return fmt.Errorf("session user id is empty")
 	}
 
 	if s.ExpiresAt.IsZero() {
