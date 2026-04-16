@@ -8,10 +8,14 @@ import (
 )
 
 // NewRouter создаёт и возвращает базовый HTTP-роутер приложения.
-func NewRouter() http.Handler {
+func NewRouter(authService handlers.AuthService) http.Handler {
 	mux := http.NewServeMux()
 
+	authHandler := handlers.NewAuthHandler(authService)
+
 	mux.HandleFunc("/health", handlers.Health)
+	mux.HandleFunc("/api/user/register", authHandler.Register)
+	mux.HandleFunc("/api/user/login", authHandler.Login)
 
 	return mux
 }
