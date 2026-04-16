@@ -10,6 +10,9 @@ import (
 
 	"github.com/Dyuzhovsergey/gophkeeper/internal/config"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/logger"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/repository/postgres"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/security"
+	authservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/auth"
 	httptransport "github.com/Dyuzhovsergey/gophkeeper/internal/transport/http"
 	"github.com/Dyuzhovsergey/gophkeeper/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -58,8 +61,21 @@ func run() error {
 	}
 
 	log.Info("migrations applied")
+	usersRepo := postgres.NewUsersRepository(db)
+	sessionsRepo := postgres.NewSessionsRepository(db)
 
-	router := httptransport.NewRouter()
+	passwordManager := security.NewBcryptManager(0)
+	tokenManager := security.NewJWTManager(cfg.JWTSecret)
+
+	authSvc := authservice.NewService(
+		usersRepo,
+		sessionsRepo,
+		passwordManager,
+		tokenManager,
+		0,
+	)
+
+	router := httptransport.NewRouter(authSvc)
 
 	srv := &http.Server{
 		Addr:    cfg.RunAddress,
