@@ -14,6 +14,7 @@ const (
 	envServerRunAddress  = "GOPHKEEPER_SERVER_RUN_ADDRESS"
 	envServerLogLevel    = "GOPHKEEPER_SERVER_LOG_LEVEL"
 	envServerDatabaseDSN = "GOPHKEEPER_SERVER_DATABASE_DSN"
+	envServerJWTSecret   = "GOPHKEEPER_SERVER_JWT_SECRET"
 )
 
 // ServerConfig описывает конфигурацию серверного приложения.
@@ -26,6 +27,9 @@ type ServerConfig struct {
 
 	// DatabaseDSN — строка подключения к PostgreSQL.
 	DatabaseDSN string
+
+	// JWTSecret — секрет подписи JWT.
+	JWTSecret string
 }
 
 // DefaultServerConfig возвращает серверную конфигурацию по умолчанию.
@@ -34,6 +38,7 @@ func DefaultServerConfig() ServerConfig {
 		RunAddress:  defaultServerRunAddress,
 		LogLevel:    defaultLogLevel,
 		DatabaseDSN: "",
+		JWTSecret:   "",
 	}
 }
 
@@ -52,6 +57,7 @@ func LoadServer(args []string) (ServerConfig, error) {
 	fs.StringVar(&cfg.RunAddress, "a", cfg.RunAddress, "HTTP server listen address")
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "logger level")
 	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL DSN")
+	fs.StringVar(&cfg.JWTSecret, "jwt-secret", cfg.JWTSecret, "JWT signing secret")
 
 	if err := fs.Parse(args); err != nil {
 		return ServerConfig{}, err
@@ -60,10 +66,12 @@ func LoadServer(args []string) (ServerConfig, error) {
 	applyStringEnv(&cfg.RunAddress, envServerRunAddress)
 	applyStringEnv(&cfg.LogLevel, envServerLogLevel)
 	applyStringEnv(&cfg.DatabaseDSN, envServerDatabaseDSN)
+	applyStringEnv(&cfg.JWTSecret, envServerJWTSecret)
 
 	cfg.RunAddress = strings.TrimSpace(cfg.RunAddress)
 	cfg.LogLevel = normalizeLogLevel(cfg.LogLevel)
 	cfg.DatabaseDSN = strings.TrimSpace(cfg.DatabaseDSN)
+	cfg.JWTSecret = strings.TrimSpace(cfg.JWTSecret)
 
 	if err := cfg.Validate(); err != nil {
 		return ServerConfig{}, err
