@@ -4,6 +4,7 @@ import "testing"
 
 func TestLoadServerDefaults(t *testing.T) {
 	t.Setenv(envServerDatabaseDSN, "postgres://sergey:password@localhost:5432/gophkeeper?sslmode=disable")
+	t.Setenv(envServerJWTSecret, "test-secret")
 
 	got, err := LoadServer(nil)
 	if err != nil {
@@ -27,11 +28,13 @@ func TestLoadServerEnvOverridesFlags(t *testing.T) {
 	t.Setenv(envServerRunAddress, "127.0.0.1:9090")
 	t.Setenv(envServerLogLevel, "WARN")
 	t.Setenv(envServerDatabaseDSN, "postgres://env-user:env-pass@localhost:5432/envdb?sslmode=disable")
+	t.Setenv(envServerJWTSecret, "env-secret")
 
 	got, err := LoadServer([]string{
 		"-a", "localhost:8080",
 		"-log-level", "debug",
 		"-d", "postgres://flag-user:flag-pass@localhost:5432/flagdb?sslmode=disable",
+		"-jwt-secret", "flag-secret",
 	})
 	if err != nil {
 		t.Fatalf("LoadServer returned error: %v", err)
