@@ -25,11 +25,11 @@ type SessionRepository interface {
 	// Create сохраняет новую сессию.
 	Create(ctx context.Context, session *domain.Session) error
 
-	// GetByToken возвращает сессию по токену.
-	GetByToken(ctx context.Context, token string) (*domain.Session, error)
+	// GetByID возвращает сессию по идентификатору.
+	GetByID(ctx context.Context, id string) (*domain.Session, error)
 
-	// DeleteByToken удаляет сессию по токену.
-	DeleteByToken(ctx context.Context, token string) error
+	// DeleteByID удаляет сессию по идентификатору.
+	DeleteByID(ctx context.Context, id string) error
 
 	// DeleteByUserID удаляет все сессии пользователя.
 	DeleteByUserID(ctx context.Context, userID string) error
