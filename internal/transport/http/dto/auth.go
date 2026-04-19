@@ -1,4 +1,4 @@
-// Package dto содержит структуры JSON запросов и ответов при регистрации и входа.
+// Package dto содержит структуры JSON запросов и ответов auth-эндпоинтов.
 package dto
 
 import "time"
