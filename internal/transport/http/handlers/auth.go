@@ -83,13 +83,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var req dto.LoginRequest
 	if err := decodeJSON(r, &req); err != nil {
-		response.Error(w, http.StatusConflict, "invalid request body")
+		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	req.Login = strings.TrimSpace(req.Login)
 	if req.Login == "" || strings.TrimSpace(req.Password) == "" {
-		response.Error(w, http.StatusConflict, "login and password are required")
+		response.Error(w, http.StatusBadRequest, "login and password are required")
 		return
 	}
 
@@ -97,10 +97,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidCredentials):
-			response.Error(w, http.StatusConflict, "invalid credentials")
+			response.Error(w, http.StatusUnauthorized, "invalid credentials")
 			return
 		default:
-			response.Error(w, http.StatusConflict, "internal server error")
+			response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
@@ -131,7 +131,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		SessionID: identity.SessionID,
 	}
 
-	response.JSON(w, http.StatusCreated, resp)
+	response.JSON(w, http.StatusOK, resp)
 }
 
 func decodeJSON(r *http.Request, dst any) error {

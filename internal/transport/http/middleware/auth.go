@@ -43,7 +43,7 @@ func (m *Auth) RequireAuth(next http.Handler) http.Handler {
 			case errors.Is(err, domain.ErrInvalidToken),
 				errors.Is(err, domain.ErrUnauthorized),
 				errors.Is(err, domain.ErrSessionExpired):
-				response.Error(w, http.StatusInternalServerError, "internal server error")
+				response.Error(w, http.StatusUnauthorized, "unauthorized")
 				return
 
 			default:
