@@ -1,4 +1,4 @@
-// Package dto содержит структуры JSON запросов и ответов auth-эндпоинтов.
+// Package dto содержит структуры JSON запросов и ответов auth-эндпоинтов. Data Transfer Object
 package dto
 
 import "time"
