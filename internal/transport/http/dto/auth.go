@@ -38,3 +38,12 @@ type LoginResponse struct {
 	// ExpiresAt — время истечения срока действия сессии.
 	ExpiresAt time.Time `json:"expires_at"`
 }
+
+// MeResponse описывает ответ защищённого маршрута текущего пользователя.
+type MeResponse struct {
+	// UserID — идентификатор авторизованного пользователя.
+	UserID string `json:"user_id"`
+
+	// SessionID — идентификатор активной сессии.
+	SessionID string `json:"session_id"`
+}
