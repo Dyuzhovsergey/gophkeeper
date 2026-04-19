@@ -2,13 +2,13 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/Dyuzhovsergey/gophkeeper/internal/domain"
 	authservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/auth"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/transport/http/response"
 )
 
 // AuthService описывает проверку авторизации,
@@ -33,7 +33,7 @@ func (m *Auth) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := extractBearerToken(r.Header.Get("Authorization"))
 		if err != nil {
-			writeError(w, http.StatusUnauthorized, "unauthorized")
+			response.Error(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
@@ -43,11 +43,11 @@ func (m *Auth) RequireAuth(next http.Handler) http.Handler {
 			case errors.Is(err, domain.ErrInvalidToken),
 				errors.Is(err, domain.ErrUnauthorized),
 				errors.Is(err, domain.ErrSessionExpired):
-				writeError(w, http.StatusUnauthorized, "unauthorized")
+				response.Error(w, http.StatusInternalServerError, "internal server error")
 				return
 
 			default:
-				writeError(w, http.StatusInternalServerError, "internal server error")
+				response.Error(w, http.StatusInternalServerError, "internal server error")
 				return
 			}
 		}
@@ -76,17 +76,4 @@ func extractBearerToken(header string) (string, error) {
 	}
 
 	return token, nil
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
-func writeError(w http.ResponseWriter, statusCode int, message string) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(statusCode)
-
-	_ = json.NewEncoder(w).Encode(errorResponse{
-		Error: message,
-	})
 }

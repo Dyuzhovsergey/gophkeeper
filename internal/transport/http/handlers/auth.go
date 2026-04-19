@@ -12,6 +12,7 @@ import (
 	"github.com/Dyuzhovsergey/gophkeeper/internal/service/auth"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/transport/http/dto"
 	httpmiddleware "github.com/Dyuzhovsergey/gophkeeper/internal/transport/http/middleware"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/transport/http/response"
 )
 
 // AuthService описывает бизнес-логику аутентификации,
@@ -43,13 +44,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var req dto.RegisterRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		response.Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	req.Login = strings.TrimSpace(req.Login)
 	if req.Login == "" || strings.TrimSpace(req.Password) == "" {
-		writeError(w, http.StatusBadRequest, "login and password are required")
+		response.Error(w, http.StatusBadRequest, "login and password are required")
 		return
 	}
 
@@ -57,10 +58,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrUserAlreadyExists):
-			writeError(w, http.StatusConflict, "user already exists")
+			response.Error(w, http.StatusConflict, "user already exists")
 			return
 		default:
-			writeError(w, http.StatusInternalServerError, "internal server error")
+			response.Error(w, http.StatusInternalServerError, "internal server error")
 			return
 		}
 	}
@@ -70,7 +71,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Login: user.Login,
 	}
 
-	writeJSON(w, http.StatusCreated, resp)
+	response.JSON(w, http.StatusCreated, resp)
 }
 
 // Login обрабатывает вход пользователя.
@@ -82,13 +83,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var req dto.LoginRequest
 	if err := decodeJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		response.Error(w, http.StatusConflict, "invalid request body")
 		return
 	}
 
 	req.Login = strings.TrimSpace(req.Login)
 	if req.Login == "" || strings.TrimSpace(req.Password) == "" {
-		writeError(w, http.StatusBadRequest, "login and password are required")
+		response.Error(w, http.StatusConflict, "login and password are required")
 		return
 	}
 
@@ -96,10 +97,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrInvalidCredentials):
-			writeError(w, http.StatusUnauthorized, "invalid credentials")
+			response.Error(w, http.StatusConflict, "invalid credentials")
 			return
 		default:
-			writeError(w, http.StatusInternalServerError, "internal server error")
+			response.Error(w, http.StatusConflict, "internal server error")
 			return
 		}
 	}
@@ -109,7 +110,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt: result.Session.ExpiresAt,
 	}
 
-	writeJSON(w, http.StatusOK, resp)
+	response.JSON(w, http.StatusOK, resp)
 }
 
 // Me возвращает identity текущего авторизованного пользователя.
@@ -121,7 +122,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	identity, ok := httpmiddleware.IdentityFromContext(r.Context())
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "identity not found in context")
+		response.Error(w, http.StatusInternalServerError, "identity not found in context")
 		return
 	}
 
@@ -130,11 +131,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		SessionID: identity.SessionID,
 	}
 
-	writeJSON(w, http.StatusOK, resp)
-}
-
-type errorResponse struct {
-	Error string `json:"error"`
+	response.JSON(w, http.StatusCreated, resp)
 }
 
 func decodeJSON(r *http.Request, dst any) error {
@@ -146,17 +143,4 @@ func decodeJSON(r *http.Request, dst any) error {
 	}
 
 	return nil
-}
-
-func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(statusCode)
-
-	_ = json.NewEncoder(w).Encode(payload)
-}
-
-func writeError(w http.ResponseWriter, statusCode int, message string) {
-	writeJSON(w, statusCode, errorResponse{
-		Error: message,
-	})
 }
