@@ -11,6 +11,7 @@ import (
 	"github.com/Dyuzhovsergey/gophkeeper/internal/domain"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/service/auth"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/transport/http/dto"
+	httpmiddleware "github.com/Dyuzhovsergey/gophkeeper/internal/transport/http/middleware"
 )
 
 // AuthService описывает бизнес-логику аутентификации,
@@ -106,6 +107,27 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	resp := dto.LoginResponse{
 		Token:     result.Token,
 		ExpiresAt: result.Session.ExpiresAt,
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// Me возвращает identity текущего авторизованного пользователя.
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	identity, ok := httpmiddleware.IdentityFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "identity not found in context")
+		return
+	}
+
+	resp := dto.MeResponse{
+		UserID:    identity.UserID,
+		SessionID: identity.SessionID,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
