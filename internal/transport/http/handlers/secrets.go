@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -273,7 +274,36 @@ func parseSecretUpsertRequest(req dto.SecretUpsertRequest) (domain.SecretType, d
 		return secretType, domain.TextData{
 			Text: payload.Text,
 		}, nil
+	case domain.SecretTypeCard:
+		var payload dto.CardData
+		if err := json.Unmarshal(req.Data, &payload); err != nil {
+			return "", nil, err
+		}
 
+		return secretType, domain.CardData{
+			Number:      payload.Number,
+			Cardholder:  payload.Cardholder,
+			ExpiryMonth: payload.ExpiryMonth,
+			ExpiryYear:  payload.ExpiryYear,
+			CVV:         payload.CVV,
+		}, nil
+
+	case domain.SecretTypeBinary:
+		var payload dto.BinaryData
+		if err := json.Unmarshal(req.Data, &payload); err != nil {
+			return "", nil, err
+		}
+
+		content, err := base64.StdEncoding.DecodeString(payload.ContentBase64)
+		if err != nil {
+			return "", nil, err
+		}
+
+		return secretType, domain.BinaryData{
+			Filename: payload.Filename,
+			MIMEType: payload.MIMEType,
+			Content:  content,
+		}, nil
 	default:
 		return "", nil, domain.ErrInvalidSecretType
 	}
@@ -316,6 +346,40 @@ func secretDataToResponse(data domain.SecretData) any {
 		}
 		return dto.TextData{
 			Text: v.Text,
+		}
+	case domain.CardData:
+		return dto.CardData{
+			Number:      v.Number,
+			Cardholder:  v.Cardholder,
+			ExpiryMonth: v.ExpiryMonth,
+			ExpiryYear:  v.ExpiryYear,
+			CVV:         v.CVV,
+		}
+	case *domain.CardData:
+		if v == nil {
+			return nil
+		}
+		return dto.CardData{
+			Number:      v.Number,
+			Cardholder:  v.Cardholder,
+			ExpiryMonth: v.ExpiryMonth,
+			ExpiryYear:  v.ExpiryYear,
+			CVV:         v.CVV,
+		}
+	case domain.BinaryData:
+		return dto.BinaryData{
+			Filename:      v.Filename,
+			MIMEType:      v.MIMEType,
+			ContentBase64: base64.StdEncoding.EncodeToString(v.Content),
+		}
+	case *domain.BinaryData:
+		if v == nil {
+			return nil
+		}
+		return dto.BinaryData{
+			Filename:      v.Filename,
+			MIMEType:      v.MIMEType,
+			ContentBase64: base64.StdEncoding.EncodeToString(v.Content),
 		}
 	default:
 		return nil
