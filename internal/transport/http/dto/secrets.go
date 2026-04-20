@@ -32,6 +32,36 @@ type TextData struct {
 	Text string `json:"text"`
 }
 
+// CardData описывает payload секрета типа card.
+type CardData struct {
+	// Number — номер карты.
+	Number string `json:"number"`
+
+	// Cardholder — имя держателя карты.
+	Cardholder string `json:"cardholder"`
+
+	// ExpiryMonth — месяц окончания срока действия.
+	ExpiryMonth uint8 `json:"expiry_month"`
+
+	// ExpiryYear — год окончания срока действия.
+	ExpiryYear uint16 `json:"expiry_year"`
+
+	// CVV — защитный код карты.
+	CVV string `json:"cvv"`
+}
+
+// BinaryData описывает payload секрета типа binary.
+type BinaryData struct {
+	// Filename — имя файла.
+	Filename string `json:"filename"`
+
+	// MIMEType — MIME-тип данных.
+	MIMEType string `json:"mime_type"`
+
+	// ContentBase64 — содержимое файла в base64.
+	ContentBase64 string `json:"content_base64"`
+}
+
 // SecretResponse описывает HTTP-ответ с одним секретом.
 type SecretResponse struct {
 	// ID — идентификатор секрета.
