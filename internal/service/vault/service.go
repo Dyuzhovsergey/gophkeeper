@@ -240,11 +240,11 @@ func normalizeAndValidateData(secretType domain.SecretType, data domain.SecretDa
 
 func validateCredentialData(data domain.CredentialData) error {
 	if strings.TrimSpace(data.Login) == "" {
-		return fmt.Errorf("credentials login is empty")
+		return fmt.Errorf("%w: credentials login is empty", domain.ErrInvalidSecretData)
 	}
 
 	if strings.TrimSpace(data.Password) == "" {
-		return fmt.Errorf("credentials password is empty")
+		return fmt.Errorf("%w: credentials password is empty", domain.ErrInvalidSecretData)
 	}
 
 	return nil
