@@ -12,6 +12,8 @@ import (
 	repo "github.com/Dyuzhovsergey/gophkeeper/internal/repository"
 )
 
+const maxBinaryPayloadSize = 1 << 20 // 1 MiB
+
 // Service реализует бизнес-логику работы с пользовательскими секретами.
 type Service struct {
 	secrets repo.SecretRepository
@@ -329,6 +331,10 @@ func validateBinaryData(data domain.BinaryData) error {
 
 	if len(data.Content) == 0 {
 		return fmt.Errorf("%w: binary content is empty", domain.ErrInvalidSecretData)
+	}
+
+	if len(data.Content) > maxBinaryPayloadSize {
+		return fmt.Errorf("%w: binary content exceeds %d bytes", domain.ErrBinaryPayloadTooLarge, maxBinaryPayloadSize)
 	}
 
 	return nil

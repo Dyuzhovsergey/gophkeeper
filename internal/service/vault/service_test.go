@@ -164,6 +164,39 @@ func TestService_CreateBinary_Success(t *testing.T) {
 	}
 }
 
+func TestService_CreateBinary_TooLarge(t *testing.T) {
+	repo := &secretRepositoryStub{
+		createFn:           mustNotCallCreate(t),
+		updateFn:           mustNotCallUpdate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	tooLargeContent := make([]byte, maxBinaryPayloadSize+1)
+
+	_, err := svc.Create(context.Background(), CreateInput{
+		OwnerID: "user-1",
+		Type:    domain.SecretTypeBinary,
+		Meta:    "large file",
+		Data: domain.BinaryData{
+			Filename: "large.bin",
+			MIMEType: "application/octet-stream",
+			Content:  tooLargeContent,
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for too large binary payload")
+	}
+
+	if !errors.Is(err, domain.ErrBinaryPayloadTooLarge) {
+		t.Fatalf("unexpected error: got %v, want wrapped %v", err, domain.ErrBinaryPayloadTooLarge)
+	}
+}
+
 func TestService_CreateInvalidText_ReturnsInvalidSecretData(t *testing.T) {
 	repo := &secretRepositoryStub{
 		createFn:           mustNotCallCreate(t),

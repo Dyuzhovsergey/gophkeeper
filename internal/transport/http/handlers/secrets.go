@@ -110,6 +110,9 @@ func (h *SecretsHandler) create(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, domain.ErrBinaryPayloadTooLarge):
+			response.Error(w, http.StatusRequestEntityTooLarge, "binary payload too large")
+			return
 		case errors.Is(err, domain.ErrInvalidSecretType),
 			errors.Is(err, domain.ErrInvalidSecretData):
 			response.Error(w, http.StatusBadRequest, "invalid secret payload")
@@ -198,6 +201,9 @@ func (h *SecretsHandler) update(w http.ResponseWriter, r *http.Request, secretID
 	})
 	if err != nil {
 		switch {
+		case errors.Is(err, domain.ErrBinaryPayloadTooLarge):
+			response.Error(w, http.StatusRequestEntityTooLarge, "binary payload too large")
+			return
 		case errors.Is(err, domain.ErrInvalidSecretType),
 			errors.Is(err, domain.ErrInvalidSecretData):
 			response.Error(w, http.StatusBadRequest, "invalid secret payload")

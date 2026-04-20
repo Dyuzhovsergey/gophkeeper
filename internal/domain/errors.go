@@ -35,4 +35,7 @@ var (
 
 	// ErrInvalidSecretData означает, что полезная нагрузка секрета некорректна.
 	ErrInvalidSecretData = errors.New("invalid secret data")
+
+	// ErrBinaryPayloadTooLarge означает, что бинарный payload превышает допустимый размер.
+	ErrBinaryPayloadTooLarge = errors.New("binary payload too large")
 )
