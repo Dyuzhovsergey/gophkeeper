@@ -252,7 +252,7 @@ func validateCredentialData(data domain.CredentialData) error {
 
 func validateTextData(data domain.TextData) error {
 	if strings.TrimSpace(data.Text) == "" {
-		return fmt.Errorf("text secret is empty")
+		return fmt.Errorf("%w: text secret is empty", domain.ErrInvalidSecretData)
 	}
 
 	return nil
