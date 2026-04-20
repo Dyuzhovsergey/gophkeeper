@@ -15,16 +15,19 @@ type AuthService interface {
 }
 
 // NewRouter создаёт и возвращает базовый HTTP-роутер приложения.
-func NewRouter(authService AuthService) http.Handler {
+func NewRouter(authService AuthService, vaultService handlers.VaultService) http.Handler {
 	mux := http.NewServeMux()
 
 	authHandler := handlers.NewAuthHandler(authService)
 	authMiddleware := middleware.NewAuth(authService)
+	secretHandler := handlers.NewSecretsHandler(vaultService)
 
 	mux.HandleFunc("/health", handlers.Health)
 	mux.HandleFunc("/api/user/register", authHandler.Register)
 	mux.HandleFunc("/api/user/login", authHandler.Login)
 	mux.Handle("/api/user/me", authMiddleware.RequireAuth(http.HandlerFunc(authHandler.Me)))
+	mux.Handle("/api/secrets", authMiddleware.RequireAuth(http.HandlerFunc(secretHandler.Collection)))
+	mux.Handle("/api/secrets/", authMiddleware.RequireAuth(http.HandlerFunc(secretHandler.Item)))
 
 	return mux
 }
