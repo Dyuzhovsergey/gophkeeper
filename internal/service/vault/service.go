@@ -232,7 +232,43 @@ func normalizeAndValidateData(secretType domain.SecretType, data domain.SecretDa
 		default:
 			return nil, domain.ErrInvalidSecretData
 		}
+	case domain.SecretTypeCard:
+		switch v := data.(type) {
+		case domain.CardData:
+			if err := validateCardData(v); err != nil {
+				return nil, err
+			}
+			return v, nil
+		case *domain.CardData:
+			if v == nil {
+				return nil, domain.ErrInvalidSecretData
+			}
+			if err := validateCardData(*v); err != nil {
+				return nil, err
+			}
+			return *v, nil
+		default:
+			return nil, domain.ErrInvalidSecretData
+		}
 
+	case domain.SecretTypeBinary:
+		switch v := data.(type) {
+		case domain.BinaryData:
+			if err := validateBinaryData(v); err != nil {
+				return nil, err
+			}
+			return v, nil
+		case *domain.BinaryData:
+			if v == nil {
+				return nil, domain.ErrInvalidSecretData
+			}
+			if err := validateBinaryData(*v); err != nil {
+				return nil, err
+			}
+			return *v, nil
+		default:
+			return nil, domain.ErrInvalidSecretData
+		}
 	default:
 		return nil, domain.ErrInvalidSecretType
 	}
@@ -253,6 +289,46 @@ func validateCredentialData(data domain.CredentialData) error {
 func validateTextData(data domain.TextData) error {
 	if strings.TrimSpace(data.Text) == "" {
 		return fmt.Errorf("%w: text secret is empty", domain.ErrInvalidSecretData)
+	}
+
+	return nil
+}
+
+func validateCardData(data domain.CardData) error {
+	if strings.TrimSpace(data.Number) == "" {
+		return fmt.Errorf("%w: card number is empty", domain.ErrInvalidSecretData)
+	}
+
+	if strings.TrimSpace(data.Cardholder) == "" {
+		return fmt.Errorf("%w: cardholder is empty", domain.ErrInvalidSecretData)
+	}
+
+	if data.ExpiryMonth < 1 || data.ExpiryMonth > 12 {
+		return fmt.Errorf("%w: invalid expiry month", domain.ErrInvalidSecretData)
+	}
+
+	if data.ExpiryYear == 0 {
+		return fmt.Errorf("%w: invalid expiry year", domain.ErrInvalidSecretData)
+	}
+
+	if strings.TrimSpace(data.CVV) == "" {
+		return fmt.Errorf("%w: card cvv is empty", domain.ErrInvalidSecretData)
+	}
+
+	return nil
+}
+
+func validateBinaryData(data domain.BinaryData) error {
+	if strings.TrimSpace(data.Filename) == "" {
+		return fmt.Errorf("%w: binary filename is empty", domain.ErrInvalidSecretData)
+	}
+
+	if strings.TrimSpace(data.MIMEType) == "" {
+		return fmt.Errorf("%w: binary mime type is empty", domain.ErrInvalidSecretData)
+	}
+
+	if len(data.Content) == 0 {
+		return fmt.Errorf("%w: binary content is empty", domain.ErrInvalidSecretData)
 	}
 
 	return nil
