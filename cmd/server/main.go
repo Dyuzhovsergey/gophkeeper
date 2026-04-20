@@ -13,6 +13,7 @@ import (
 	"github.com/Dyuzhovsergey/gophkeeper/internal/repository/postgres"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/security"
 	authservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/auth"
+	vaultservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/vault"
 	httptransport "github.com/Dyuzhovsergey/gophkeeper/internal/transport/http"
 	"github.com/Dyuzhovsergey/gophkeeper/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -75,7 +76,11 @@ func run() error {
 		0,
 	)
 
-	router := httptransport.NewRouter(authSvc)
+	secretsRepo := postgres.NewSecretsRepository(db)
+
+	vaultSvc := vaultservice.NewService(secretsRepo)
+
+	router := httptransport.NewRouter(authSvc, vaultSvc)
 
 	srv := &http.Server{
 		Addr:    cfg.RunAddress,
