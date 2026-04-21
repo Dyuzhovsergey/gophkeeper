@@ -410,6 +410,42 @@ func (m *Model) viewMenu() string {
 	return b.String()
 }
 
+func (m *Model) currentSessionStatusLine() string {
+	if !m.hasLocalSession {
+		if strings.TrimSpace(m.sessionStatus) != "" {
+			return m.sessionStatus
+		}
+		return "No active local session"
+	}
+
+	if !m.sessionValid {
+		if strings.TrimSpace(m.sessionStatus) != "" {
+			return m.sessionStatus
+		}
+		return "Local session found, but token is invalid"
+	}
+
+	expiresAt := ""
+	if !m.sessionExpiresAt.IsZero() {
+		expiresAt = m.sessionExpiresAt.Format(time.RFC3339)
+	}
+
+	if expiresAt != "" {
+		return fmt.Sprintf(
+			"Logged in as %s (session=%s, expires=%s)",
+			m.sessionUserID,
+			m.sessionSessionID,
+			expiresAt,
+		)
+	}
+
+	return fmt.Sprintf(
+		"Logged in as %s (session=%s)",
+		m.sessionUserID,
+		m.sessionSessionID,
+	)
+}
+
 func (m *Model) viewForm(title string) string {
 	var b strings.Builder
 
