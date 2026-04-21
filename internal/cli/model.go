@@ -781,6 +781,9 @@ func (m *Model) runLogoutCmd() tea.Cmd {
 			return actionErrorMsg{err: fmt.Errorf("clear local session: %w", err)}
 		}
 
+		m.secrets = nil
+		m.secretsIndex = 0
+
 		return sessionStatusMsg{
 			hasLocalSession: false,
 			sessionValid:    false,
