@@ -636,7 +636,12 @@ func (m *Model) runLogoutCmd() tea.Cmd {
 			return actionErrorMsg{err: fmt.Errorf("clear local session: %w", err)}
 		}
 
-		return actionResultMsg{text: "Logout successful"}
+		return sessionStatusMsg{
+			hasLocalSession: false,
+			sessionValid:    false,
+			status:          "No active local session",
+			showMessage:     "Logout successful",
+		}
 	}
 }
 
