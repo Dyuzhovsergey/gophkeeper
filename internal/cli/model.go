@@ -50,6 +50,8 @@ const (
 	screenLogin
 	screenMessage
 	screenSecretsList
+	screenCreateTextSecret
+	screenCreateCredentialsSecret
 )
 
 // menuItems содержит доступные пункты главного меню TUI.
@@ -57,9 +59,11 @@ var menuItems = []string{
 	"register",
 	"login",
 	"logout",
-	"secrets",
-	"version",
 	"me",
+	"secrets",
+	"add text",
+	"add credentials",
+	"version",
 	"quit",
 }
 
@@ -154,6 +158,7 @@ func (m *Model) View() string {
 		if m.busy {
 			return "working...\n"
 		}
+
 		return m.message + "\n\nPress Enter or Esc to return to menu.\n"
 
 	case screenSecretsList:
@@ -162,6 +167,12 @@ func (m *Model) View() string {
 		}
 
 		return m.viewSecretsList()
+
+	case screenCreateTextSecret:
+		return m.viewSecretForm("Create text secret")
+
+	case screenCreateCredentialsSecret:
+		return m.viewSecretForm("Create credentials secret")
 
 	default:
 		return ""
@@ -235,11 +246,14 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenMenu:
 			return m.updateMenu(msg)
 
-		case screenRegister, screenLogin:
+		case screenRegister, screenLogin, screenCreateTextSecret, screenCreateCredentialsSecret:
 			model, cmd, handled := m.updateForm(msg)
 			if handled {
 				return model, cmd
 			}
+
+		case screenSecretsList:
+			return m.updateSecretsList(msg)
 
 		case screenMessage:
 			switch msg.String() {
@@ -250,13 +264,13 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c", "q":
 				return m, tea.Quit
 			}
-		case screenSecretsList:
-			return m.updateSecretsList(msg)
 		}
-
 	}
 
-	if m.screen == screenRegister || m.screen == screenLogin {
+	if m.screen == screenRegister ||
+		m.screen == screenLogin ||
+		m.screen == screenCreateTextSecret ||
+		m.screen == screenCreateCredentialsSecret {
 		var cmds []tea.Cmd
 
 		for i := range m.inputs {
@@ -354,6 +368,10 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, m.runRegisterCmd(), true
 			case screenLogin:
 				return m, m.runLoginCmd(), true
+			case screenCreateTextSecret:
+				return m, m.runCreateTextSecretCmd(), true
+			case screenCreateCredentialsSecret:
+				return m, m.runCreateCredentialsSecretCmd(), true
 			}
 		}
 
@@ -394,6 +412,14 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 		m.busy = true
 		return m, m.runListSecretsCmd()
 
+	case "add text":
+		m.initSecretForm(screenCreateTextSecret)
+		return m, nil
+
+	case "add credentials":
+		m.initSecretForm(screenCreateCredentialsSecret)
+		return m, nil
+
 	case "quit":
 		return m, tea.Quit
 	}
@@ -422,6 +448,52 @@ func (m *Model) initAuthForm(screen uiScreen) {
 
 	m.inputs = []textinput.Model{loginInput, passwordInput}
 	m.focusIndex = 0
+}
+
+// initSecretForm подготавливает поля ввода для создания секрета.
+func (m *Model) initSecretForm(screen uiScreen) {
+	m.screen = screen
+	m.busy = false
+	m.message = ""
+
+	switch screen {
+	case screenCreateTextSecret:
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		textInput := textinput.New()
+		textInput.Placeholder = "Text"
+		textInput.CharLimit = 2048
+		textInput.Width = 50
+
+		m.inputs = []textinput.Model{metaInput, textInput}
+		m.focusIndex = 0
+
+	case screenCreateCredentialsSecret:
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		loginInput := textinput.New()
+		loginInput.Placeholder = "Login"
+		loginInput.CharLimit = 256
+		loginInput.Width = 50
+
+		passwordInput := textinput.New()
+		passwordInput.Placeholder = "Password"
+		passwordInput.EchoMode = textinput.EchoPassword
+		passwordInput.EchoCharacter = '•'
+		passwordInput.CharLimit = 256
+		passwordInput.Width = 50
+
+		m.inputs = []textinput.Model{metaInput, loginInput, passwordInput}
+		m.focusIndex = 0
+	}
 }
 
 // moveFormFocus переключает фокус между полями формы.
@@ -577,6 +649,26 @@ func (m *Model) viewForm(title string) string {
 	if len(m.inputs) >= 2 {
 		b.WriteString("Password:\n")
 		b.WriteString(m.inputs[1].View() + "\n\n")
+	}
+
+	if m.busy {
+		b.WriteString("working...\n")
+	} else {
+		b.WriteString("Tab/↑/↓ to switch field, Enter to submit, Esc to cancel.\n")
+	}
+
+	return b.String()
+}
+
+// viewSecretForm формирует текстовое представление формы создания секрета.
+func (m *Model) viewSecretForm(title string) string {
+	var b strings.Builder
+
+	b.WriteString(title + "\n\n")
+
+	for _, input := range m.inputs {
+		b.WriteString(input.Placeholder + ":\n")
+		b.WriteString(input.View() + "\n\n")
 	}
 
 	if m.busy {
@@ -771,6 +863,72 @@ func (m *Model) runListSecretsCmd() tea.Cmd {
 		}
 
 		return secretsListMsg{items: resp.Items}
+	}
+}
+
+// runCreateTextSecretCmd создаёт текстовый секрет через интерактивную форму.
+func (m *Model) runCreateTextSecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	text := strings.TrimSpace(m.inputs[1].Value())
+
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		resp, err := m.api.CreateSecret(context.Background(), session.Token, clientapi.SecretUpsertRequest{
+			Type: "text",
+			Meta: meta,
+			Data: clientapi.TextData{
+				Text: text,
+			},
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return actionResultMsg{
+			text: fmt.Sprintf("Text secret created: id=%s type=%s", resp.ID, resp.Type),
+		}
+	}
+}
+
+// runCreateCredentialsSecretCmd создаёт секрет типа credentials через интерактивную форму.
+func (m *Model) runCreateCredentialsSecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	login := strings.TrimSpace(m.inputs[1].Value())
+	password := m.inputs[2].Value()
+
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		resp, err := m.api.CreateSecret(context.Background(), session.Token, clientapi.SecretUpsertRequest{
+			Type: "credentials",
+			Meta: meta,
+			Data: clientapi.CredentialsData{
+				Login:    login,
+				Password: password,
+			},
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return actionResultMsg{
+			text: fmt.Sprintf("Credentials secret created: id=%s type=%s", resp.ID, resp.Type),
+		}
 	}
 }
 
