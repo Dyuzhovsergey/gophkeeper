@@ -75,7 +75,7 @@ func (m *Model) Init() tea.Cmd {
 		return m.runAction()
 	}
 
-	return nil
+	return textinput.Blink
 }
 
 // Update обрабатывает события Bubble Tea.
@@ -167,7 +167,10 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateMenu(msg)
 
 		case screenRegister, screenLogin:
-			return m.updateForm(msg)
+			model, cmd, handled := m.updateForm(msg)
+			if handled {
+				return model, cmd
+			}
 
 		case screenMessage:
 			switch msg.String() {
@@ -220,22 +223,22 @@ func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if m.busy {
-		return m, nil
+		return m, nil, true
 	}
 
 	switch msg.String() {
 	case "ctrl+c":
-		return m, tea.Quit
+		return m, tea.Quit, true
 
 	case "esc":
 		m.resetToMenu()
-		return m, nil
+		return m, nil, true
 
 	case "tab", "shift+tab", "up", "down":
 		m.moveFormFocus(msg.String())
-		return m, nil
+		return m, nil, true
 
 	case "enter":
 		if m.focusIndex == len(m.inputs)-1 {
@@ -244,17 +247,19 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			switch m.screen {
 			case screenRegister:
-				return m, m.runRegisterCmd()
+				return m, m.runRegisterCmd(), true
 			case screenLogin:
-				return m, m.runLoginCmd()
+				return m, m.runLoginCmd(), true
 			}
 		}
 
 		m.moveFormFocus("down")
-		return m, nil
+		return m, nil, true
 	}
 
-	return m, nil
+	// Обычные символы не обрабатываем здесь,
+	// чтобы они попали в textinput.Update(...)
+	return m, nil, false
 }
 
 func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
