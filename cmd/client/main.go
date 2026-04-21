@@ -5,9 +5,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/Dyuzhovsergey/gophkeeper/internal/cli/commands"
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/Dyuzhovsergey/gophkeeper/internal/cli"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/clientapi"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/config"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/logger"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/storage/local"
 )
 
 func main() {
@@ -33,12 +37,35 @@ func run() error {
 		_ = log.Sync()
 	}()
 
-	if len(commandArgs) == 0 {
-		return fmt.Errorf("client command is required")
+	apiClient, err := clientapi.New(cfg.ServerAddress, nil)
+	if err != nil {
+		return fmt.Errorf("init client api: %w", err)
 	}
 
-	if err := commands.Run(commandArgs, os.Stdout); err != nil {
-		return err
+	sessionPath, err := local.DefaultSessionPath()
+	if err != nil {
+		return fmt.Errorf("resolve local session path: %w", err)
+	}
+
+	store, err := local.NewFileStore(sessionPath)
+	if err != nil {
+		return fmt.Errorf("init local session store: %w", err)
+	}
+
+	model := cli.NewModel(apiClient, store, commandArgs)
+
+	finalModel, err := tea.NewProgram(model).Run()
+	if err != nil {
+		return fmt.Errorf("run bubble tea program: %w", err)
+	}
+
+	resultModel, ok := finalModel.(*cli.Model)
+	if !ok {
+		return fmt.Errorf("unexpected bubble tea final model type: %T", finalModel)
+	}
+
+	if resultModel.Err() != nil {
+		return resultModel.Err()
 	}
 
 	return nil
@@ -65,6 +92,8 @@ func splitClientArgs(args []string) ([]string, []string) {
 			continue
 
 		case strings.HasPrefix(arg, "-"):
+			// Неизвестный флаг считаем глобальным.
+			// Ошибку на нём вернёт config.LoadClient.
 			continue
 
 		default:
