@@ -36,6 +36,11 @@ type sessionStatusMsg struct {
 	showMessage     string
 }
 
+// secretsListMsg передаёт в модель загруженный список секретов пользователя.
+type secretsListMsg struct {
+	items []clientapi.SecretResponse
+}
+
 // uiScreen описывает текущий экран TUI-клиента.
 type uiScreen int
 
@@ -44,6 +49,7 @@ const (
 	screenRegister
 	screenLogin
 	screenMessage
+	screenSecretsList
 )
 
 // menuItems содержит доступные пункты главного меню TUI.
@@ -51,6 +57,7 @@ var menuItems = []string{
 	"register",
 	"login",
 	"logout",
+	"secrets",
 	"version",
 	"me",
 	"quit",
@@ -79,6 +86,12 @@ type Model struct {
 	sessionSessionID string
 	sessionExpiresAt time.Time
 	sessionStatus    string
+
+	// secrets хранит последний загруженный список секретов.
+	secrets []clientapi.SecretResponse
+
+	// secretsIndex хранит индекс выбранного секрета в списке.
+	secretsIndex int
 }
 
 // NewModel создаёт стартовую Bubble Tea model клиента.
@@ -141,8 +154,14 @@ func (m *Model) View() string {
 		if m.busy {
 			return "working...\n"
 		}
-
 		return m.message + "\n\nPress Enter or Esc to return to menu.\n"
+
+	case screenSecretsList:
+		if m.busy {
+			return "loading secrets...\n"
+		}
+
+		return m.viewSecretsList()
 
 	default:
 		return ""
@@ -202,8 +221,15 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenMessage
 			m.message = msg.showMessage
 		}
-
 		return m, nil
+
+	case secretsListMsg:
+		m.busy = false
+		m.screen = screenSecretsList
+		m.secrets = msg.items
+		m.secretsIndex = 0
+		return m, nil
+
 	case tea.KeyMsg:
 		switch m.screen {
 		case screenMenu:
@@ -224,7 +250,10 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c", "q":
 				return m, tea.Quit
 			}
+		case screenSecretsList:
+			return m.updateSecretsList(msg)
 		}
+
 	}
 
 	if m.screen == screenRegister || m.screen == screenLogin {
@@ -262,6 +291,36 @@ func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "enter":
 		return m.selectMenuItem()
+	}
+
+	return m, nil
+}
+
+// updateSecretsList обрабатывает клавиши на экране списка секретов.
+func (m *Model) updateSecretsList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "esc":
+		m.screen = screenMenu
+		return m, nil
+
+	case "up", "k":
+		if m.secretsIndex > 0 {
+			m.secretsIndex--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.secretsIndex < len(m.secrets)-1 {
+			m.secretsIndex++
+		}
+		return m, nil
+
+	case "r":
+		m.busy = true
+		return m, m.runListSecretsCmd()
 	}
 
 	return m, nil
@@ -326,9 +385,14 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 		m.screen = screenMessage
 		m.message = buildinfo.Current().String()
 		return m, nil
+
 	case "me":
 		m.busy = true
 		return m, m.runMeCmd()
+
+	case "secrets":
+		m.busy = true
+		return m, m.runListSecretsCmd()
 
 	case "quit":
 		return m, tea.Quit
@@ -426,6 +490,32 @@ func (m *Model) viewMenu() string {
 	return b.String()
 }
 
+// viewSecretsList формирует текстовое представление списка секретов.
+func (m *Model) viewSecretsList() string {
+	var b strings.Builder
+
+	b.WriteString("Secrets\n\n")
+
+	if len(m.secrets) == 0 {
+		b.WriteString("No secrets found.\n\n")
+		b.WriteString("Esc to return, r to reload.\n")
+		return b.String()
+	}
+
+	for i, item := range m.secrets {
+		prefix := "  "
+		if i == m.secretsIndex {
+			prefix = "> "
+		}
+
+		b.WriteString(prefix + formatSecretListItem(item) + "\n")
+	}
+
+	b.WriteString("\nUse ↑/↓ (or j/k), Esc to return, r to reload.\n")
+
+	return b.String()
+}
+
 // currentSessionStatusLine возвращает краткую строку состояния текущей локальной сессии.
 func (m *Model) currentSessionStatusLine() string {
 	if !m.hasLocalSession {
@@ -461,6 +551,16 @@ func (m *Model) currentSessionStatusLine() string {
 		m.sessionUserID,
 		m.sessionSessionID,
 	)
+}
+
+// formatSecretListItem возвращает краткую строку представления секрета в списке.
+func formatSecretListItem(item clientapi.SecretResponse) string {
+	meta := strings.TrimSpace(item.Meta)
+	if meta == "" {
+		meta = "-"
+	}
+
+	return fmt.Sprintf("[%s] id=%s meta=%s", item.Type, item.ID, meta)
 }
 
 // viewForm формирует текстовое представление формы входа или регистрации.
@@ -650,6 +750,27 @@ func (m *Model) runMeCmd() tea.Cmd {
 				session.ExpiresAt.Format(time.RFC3339),
 			),
 		}
+	}
+}
+
+// runListSecretsCmd загружает список секретов текущего пользователя.
+func (m *Model) runListSecretsCmd() tea.Cmd {
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		resp, err := m.api.ListSecrets(context.Background(), session.Token)
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretsListMsg{items: resp.Items}
 	}
 }
 
