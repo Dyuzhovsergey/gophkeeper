@@ -540,6 +540,42 @@ func (m *Model) runLoginCmd() tea.Cmd {
 	}
 }
 
+func (m *Model) loadSessionStatusCmd() tea.Cmd {
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return sessionStatusMsg{
+					hasLocalSession: false,
+					sessionValid:    false,
+					status:          "No active local session",
+				}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		meResp, err := m.api.Me(context.Background(), session.Token)
+		if err != nil {
+			return sessionStatusMsg{
+				hasLocalSession: true,
+				sessionValid:    false,
+				expiresAt:       session.ExpiresAt,
+				status:          "Local session found, but token is invalid on server",
+			}
+		}
+
+		return sessionStatusMsg{
+			hasLocalSession: true,
+			sessionValid:    true,
+			userID:          meResp.UserID,
+			sessionID:       meResp.SessionID,
+			expiresAt:       session.ExpiresAt,
+			status:          "Active local session",
+		}
+	}
+}
+
 func (m *Model) runLogoutCmd() tea.Cmd {
 	return func() tea.Msg {
 		if err := m.store.ClearSession(); err != nil {
