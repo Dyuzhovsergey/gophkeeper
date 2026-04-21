@@ -15,14 +15,17 @@ import (
 	"github.com/Dyuzhovsergey/gophkeeper/internal/storage/local"
 )
 
+// actionResultMsg передаёт в модель успешный результат выполнения действия.
 type actionResultMsg struct {
 	text string
 }
 
+// actionErrorMsg передаёт в модель ошибку выполнения действия.
 type actionErrorMsg struct {
 	err error
 }
 
+// sessionStatusMsg передаёт в модель информацию о состоянии локальной сессии.
 type sessionStatusMsg struct {
 	hasLocalSession bool
 	sessionValid    bool
@@ -33,6 +36,7 @@ type sessionStatusMsg struct {
 	showMessage     string
 }
 
+// uiScreen описывает текущий экран TUI-клиента.
 type uiScreen int
 
 const (
@@ -42,6 +46,7 @@ const (
 	screenMessage
 )
 
+// menuItems содержит доступные пункты главного меню TUI.
 var menuItems = []string{
 	"register",
 	"login",
@@ -149,10 +154,12 @@ func (m *Model) Err() error {
 	return m.err
 }
 
+// isCommandMode показывает, запущен ли клиент в режиме команды с аргументами.
 func (m *Model) isCommandMode() bool {
 	return len(m.args) > 0
 }
 
+// updateCommandMode обрабатывает сообщения Bubble Tea в режиме запуска с аргументами.
 func (m *Model) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case actionResultMsg:
@@ -168,6 +175,7 @@ func (m *Model) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
+// updateTUIMode обрабатывает сообщения Bubble Tea в интерактивном TUI-режиме.
 func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case actionResultMsg:
@@ -234,6 +242,7 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateMenu обрабатывает нажатия клавиш на экране главного меню.
 func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "ctrl+c", "q":
@@ -258,6 +267,7 @@ func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateForm обрабатывает специальные клавиши на экране формы и сообщает, было ли событие обработано.
 func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	if m.busy {
 		return m, nil, true
@@ -297,6 +307,7 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 	return m, nil, false
 }
 
+// selectMenuItem запускает действие, выбранное в главном меню.
 func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 	switch menuItems[m.menuIndex] {
 	case "register":
@@ -326,6 +337,7 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// initAuthForm подготавливает поля ввода для экрана регистрации или входа.
 func (m *Model) initAuthForm(screen uiScreen) {
 	m.screen = screen
 	m.busy = false
@@ -348,6 +360,7 @@ func (m *Model) initAuthForm(screen uiScreen) {
 	m.focusIndex = 0
 }
 
+// moveFormFocus переключает фокус между полями формы.
 func (m *Model) moveFormFocus(direction string) {
 	if len(m.inputs) == 0 {
 		return
@@ -376,12 +389,14 @@ func (m *Model) moveFormFocus(direction string) {
 	}
 }
 
+// blurInputs снимает фокус со всех полей ввода формы.
 func (m *Model) blurInputs() {
 	for i := range m.inputs {
 		m.inputs[i].Blur()
 	}
 }
 
+// resetToMenu сбрасывает состояние формы и возвращает пользователя в главное меню.
 func (m *Model) resetToMenu() {
 	m.screen = screenMenu
 	m.inputs = nil
@@ -389,6 +404,7 @@ func (m *Model) resetToMenu() {
 	m.busy = false
 }
 
+// viewMenu формирует текстовое представление главного меню TUI.
 func (m *Model) viewMenu() string {
 	var b strings.Builder
 
@@ -410,6 +426,7 @@ func (m *Model) viewMenu() string {
 	return b.String()
 }
 
+// currentSessionStatusLine возвращает краткую строку состояния текущей локальной сессии.
 func (m *Model) currentSessionStatusLine() string {
 	if !m.hasLocalSession {
 		if strings.TrimSpace(m.sessionStatus) != "" {
@@ -446,6 +463,7 @@ func (m *Model) currentSessionStatusLine() string {
 	)
 }
 
+// viewForm формирует текстовое представление формы входа или регистрации.
 func (m *Model) viewForm(title string) string {
 	var b strings.Builder
 
@@ -470,6 +488,7 @@ func (m *Model) viewForm(title string) string {
 	return b.String()
 }
 
+// runAction запускает выполнение команды в режиме работы с аргументами.
 func (m *Model) runAction() tea.Cmd {
 	return func() tea.Msg {
 		text, err := m.execute(context.Background())
@@ -481,6 +500,7 @@ func (m *Model) runAction() tea.Cmd {
 	}
 }
 
+// runRegisterCmd запускает регистрацию пользователя из интерактивной формы.
 func (m *Model) runRegisterCmd() tea.Cmd {
 	login := strings.TrimSpace(m.inputs[0].Value())
 	password := m.inputs[1].Value()
@@ -500,6 +520,7 @@ func (m *Model) runRegisterCmd() tea.Cmd {
 	}
 }
 
+// runLoginCmd выполняет вход пользователя и сохраняет локальную сессию.
 func (m *Model) runLoginCmd() tea.Cmd {
 	login := strings.TrimSpace(m.inputs[0].Value())
 	password := m.inputs[1].Value()
@@ -550,6 +571,7 @@ func (m *Model) runLoginCmd() tea.Cmd {
 	}
 }
 
+// loadSessionStatusCmd загружает локальную сессию и проверяет её валидность через API.
 func (m *Model) loadSessionStatusCmd() tea.Cmd {
 	return func() tea.Msg {
 		session, err := m.store.LoadSession()
@@ -586,6 +608,7 @@ func (m *Model) loadSessionStatusCmd() tea.Cmd {
 	}
 }
 
+// runMeCmd проверяет сохранённую локальную сессию и показывает текущего пользователя.
 func (m *Model) runMeCmd() tea.Cmd {
 	return func() tea.Msg {
 		session, err := m.store.LoadSession()
@@ -630,6 +653,7 @@ func (m *Model) runMeCmd() tea.Cmd {
 	}
 }
 
+// runLogoutCmd очищает локальную сессию пользователя.
 func (m *Model) runLogoutCmd() tea.Cmd {
 	return func() tea.Msg {
 		if err := m.store.ClearSession(); err != nil {
@@ -645,6 +669,7 @@ func (m *Model) runLogoutCmd() tea.Cmd {
 	}
 }
 
+// execute выполняет клиентскую команду в режиме запуска с аргументами командной строки.
 func (m *Model) execute(ctx context.Context) (string, error) {
 	if len(m.args) == 0 {
 		return "", fmt.Errorf("client command is required")
