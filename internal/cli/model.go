@@ -23,6 +23,16 @@ type actionErrorMsg struct {
 	err error
 }
 
+type sessionStatusMsg struct {
+	hasLocalSession bool
+	sessionValid    bool
+	userID          string
+	sessionID       string
+	expiresAt       time.Time
+	status          string
+	showMessage     string
+}
+
 type uiScreen int
 
 const (
@@ -37,6 +47,7 @@ var menuItems = []string{
 	"login",
 	"logout",
 	"version",
+	"me",
 	"quit",
 }
 
@@ -56,6 +67,13 @@ type Model struct {
 	focusIndex int
 	busy       bool
 	message    string
+
+	hasLocalSession  bool
+	sessionValid     bool
+	sessionUserID    string
+	sessionSessionID string
+	sessionExpiresAt time.Time
+	sessionStatus    string
 }
 
 // NewModel создаёт стартовую Bubble Tea model клиента.
@@ -75,7 +93,10 @@ func (m *Model) Init() tea.Cmd {
 		return m.runAction()
 	}
 
-	return textinput.Blink
+	return tea.Batch(
+		textinput.Blink,
+		m.loadSessionStatusCmd(),
+	)
 }
 
 // Update обрабатывает события Bubble Tea.
@@ -160,7 +181,21 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenMessage
 		m.message = "Error: " + msg.err.Error()
 		return m, nil
+	case sessionStatusMsg:
+		m.busy = false
+		m.hasLocalSession = msg.hasLocalSession
+		m.sessionValid = msg.sessionValid
+		m.sessionUserID = msg.userID
+		m.sessionSessionID = msg.sessionID
+		m.sessionExpiresAt = msg.expiresAt
+		m.sessionStatus = msg.status
 
+		if msg.showMessage != "" {
+			m.screen = screenMessage
+			m.message = msg.showMessage
+		}
+
+		return m, nil
 	case tea.KeyMsg:
 		switch m.screen {
 		case screenMenu:
@@ -280,6 +315,9 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 		m.screen = screenMessage
 		m.message = buildinfo.Current().String()
 		return m, nil
+	case "me":
+		m.busy = true
+		return m, m.runMeCmd()
 
 	case "quit":
 		return m, tea.Quit
@@ -355,6 +393,7 @@ func (m *Model) viewMenu() string {
 	var b strings.Builder
 
 	b.WriteString("GophKeeper\n\n")
+	b.WriteString("Session status: " + m.currentSessionStatusLine() + "\n\n")
 	b.WriteString("Choose an action:\n\n")
 
 	for i, item := range menuItems {
