@@ -534,8 +534,18 @@ func (m *Model) runLoginCmd() tea.Cmd {
 			return actionErrorMsg{err: fmt.Errorf("save local session: %w", err)}
 		}
 
-		return actionResultMsg{
-			text: fmt.Sprintf("Login successful: user_id=%s session_id=%s", meResp.UserID, meResp.SessionID),
+		return sessionStatusMsg{
+			hasLocalSession: true,
+			sessionValid:    true,
+			userID:          meResp.UserID,
+			sessionID:       meResp.SessionID,
+			expiresAt:       expiresAt,
+			status:          "Active local session",
+			showMessage: fmt.Sprintf(
+				"Login successful: user_id=%s session_id=%s",
+				meResp.UserID,
+				meResp.SessionID,
+			),
 		}
 	}
 }
