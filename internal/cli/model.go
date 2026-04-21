@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Dyuzhovsergey/gophkeeper/internal/buildinfo"
@@ -22,7 +23,24 @@ type actionErrorMsg struct {
 	err error
 }
 
-// Model описывает минимальную Bubble Tea model клиента.
+type uiScreen int
+
+const (
+	screenMenu uiScreen = iota
+	screenRegister
+	screenLogin
+	screenMessage
+)
+
+var menuItems = []string{
+	"register",
+	"login",
+	"logout",
+	"version",
+	"quit",
+}
+
+// Model описывает Bubble Tea model клиента.
 type Model struct {
 	api   *clientapi.Client
 	store *local.FileStore
@@ -30,24 +48,91 @@ type Model struct {
 
 	output string
 	err    error
+
+	screen    uiScreen
+	menuIndex int
+
+	inputs     []textinput.Model
+	focusIndex int
+	busy       bool
+	message    string
 }
 
 // NewModel создаёт стартовую Bubble Tea model клиента.
 func NewModel(api *clientapi.Client, store *local.FileStore, args []string) *Model {
 	return &Model{
-		api:   api,
-		store: store,
-		args:  args,
+		api:       api,
+		store:     store,
+		args:      args,
+		screen:    screenMenu,
+		menuIndex: 0,
 	}
 }
 
 // Init запускает выполнение выбранной команды.
 func (m *Model) Init() tea.Cmd {
-	return m.runAction()
+	if m.isCommandMode() {
+		return m.runAction()
+	}
+
+	return nil
 }
 
-// Update обрабатывает результат выполнения команды.
+// Update обрабатывает события Bubble Tea.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.isCommandMode() {
+		return m.updateCommandMode(msg)
+	}
+
+	return m.updateTUIMode(msg)
+}
+
+// View возвращает вывод Bubble Tea model.
+func (m *Model) View() string {
+	if m.isCommandMode() {
+		if m.err != nil {
+			return m.err.Error() + "\n"
+		}
+
+		if m.output == "" {
+			return "working...\n"
+		}
+
+		return m.output + "\n"
+	}
+
+	switch m.screen {
+	case screenMenu:
+		return m.viewMenu()
+
+	case screenRegister:
+		return m.viewForm("Register")
+
+	case screenLogin:
+		return m.viewForm("Login")
+
+	case screenMessage:
+		if m.busy {
+			return "working...\n"
+		}
+
+		return m.message + "\n\nPress Enter or Esc to return to menu.\n"
+
+	default:
+		return ""
+	}
+}
+
+// Err возвращает итоговую ошибку выполнения команды.
+func (m *Model) Err() error {
+	return m.err
+}
+
+func (m *Model) isCommandMode() bool {
+	return len(m.args) > 0
+}
+
+func (m *Model) updateCommandMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case actionResultMsg:
 		m.output = msg.text
@@ -62,22 +147,247 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-// View возвращает вывод Bubble Tea model.
-func (m *Model) View() string {
-	if m.err != nil {
-		return m.err.Error() + "\n"
+func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case actionResultMsg:
+		m.busy = false
+		m.screen = screenMessage
+		m.message = msg.text
+		return m, nil
+
+	case actionErrorMsg:
+		m.busy = false
+		m.screen = screenMessage
+		m.message = "Error: " + msg.err.Error()
+		return m, nil
+
+	case tea.KeyMsg:
+		switch m.screen {
+		case screenMenu:
+			return m.updateMenu(msg)
+
+		case screenRegister, screenLogin:
+			return m.updateForm(msg)
+
+		case screenMessage:
+			switch msg.String() {
+			case "enter", "esc":
+				m.screen = screenMenu
+				m.message = ""
+				return m, nil
+			case "ctrl+c", "q":
+				return m, tea.Quit
+			}
+		}
 	}
 
-	if m.output == "" {
-		return "working...\n"
+	if m.screen == screenRegister || m.screen == screenLogin {
+		var cmds []tea.Cmd
+
+		for i := range m.inputs {
+			var cmd tea.Cmd
+			m.inputs[i], cmd = m.inputs[i].Update(msg)
+			cmds = append(cmds, cmd)
+		}
+
+		return m, tea.Batch(cmds...)
 	}
 
-	return m.output + "\n"
+	return m, nil
 }
 
-// Err возвращает итоговую ошибку выполнения команды.
-func (m *Model) Err() error {
-	return m.err
+func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "up", "k":
+		if m.menuIndex > 0 {
+			m.menuIndex--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.menuIndex < len(menuItems)-1 {
+			m.menuIndex++
+		}
+		return m, nil
+
+	case "enter":
+		return m.selectMenuItem()
+	}
+
+	return m, nil
+}
+
+func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.busy {
+		return m, nil
+	}
+
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+
+	case "esc":
+		m.resetToMenu()
+		return m, nil
+
+	case "tab", "shift+tab", "up", "down":
+		m.moveFormFocus(msg.String())
+		return m, nil
+
+	case "enter":
+		if m.focusIndex == len(m.inputs)-1 {
+			m.blurInputs()
+			m.busy = true
+
+			switch m.screen {
+			case screenRegister:
+				return m, m.runRegisterCmd()
+			case screenLogin:
+				return m, m.runLoginCmd()
+			}
+		}
+
+		m.moveFormFocus("down")
+		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
+	switch menuItems[m.menuIndex] {
+	case "register":
+		m.initAuthForm(screenRegister)
+		return m, nil
+
+	case "login":
+		m.initAuthForm(screenLogin)
+		return m, nil
+
+	case "logout":
+		m.busy = true
+		return m, m.runLogoutCmd()
+
+	case "version":
+		m.screen = screenMessage
+		m.message = buildinfo.Current().String()
+		return m, nil
+
+	case "quit":
+		return m, tea.Quit
+	}
+
+	return m, nil
+}
+
+func (m *Model) initAuthForm(screen uiScreen) {
+	m.screen = screen
+	m.busy = false
+	m.message = ""
+
+	loginInput := textinput.New()
+	loginInput.Placeholder = "Login"
+	loginInput.Focus()
+	loginInput.CharLimit = 256
+	loginInput.Width = 40
+
+	passwordInput := textinput.New()
+	passwordInput.Placeholder = "Password"
+	passwordInput.EchoMode = textinput.EchoPassword
+	passwordInput.EchoCharacter = '•'
+	passwordInput.CharLimit = 256
+	passwordInput.Width = 40
+
+	m.inputs = []textinput.Model{loginInput, passwordInput}
+	m.focusIndex = 0
+}
+
+func (m *Model) moveFormFocus(direction string) {
+	if len(m.inputs) == 0 {
+		return
+	}
+
+	switch direction {
+	case "up", "shift+tab":
+		m.focusIndex--
+	default:
+		m.focusIndex++
+	}
+
+	if m.focusIndex >= len(m.inputs) {
+		m.focusIndex = 0
+	}
+	if m.focusIndex < 0 {
+		m.focusIndex = len(m.inputs) - 1
+	}
+
+	for i := range m.inputs {
+		if i == m.focusIndex {
+			m.inputs[i].Focus()
+		} else {
+			m.inputs[i].Blur()
+		}
+	}
+}
+
+func (m *Model) blurInputs() {
+	for i := range m.inputs {
+		m.inputs[i].Blur()
+	}
+}
+
+func (m *Model) resetToMenu() {
+	m.screen = screenMenu
+	m.inputs = nil
+	m.focusIndex = 0
+	m.busy = false
+}
+
+func (m *Model) viewMenu() string {
+	var b strings.Builder
+
+	b.WriteString("GophKeeper\n\n")
+	b.WriteString("Choose an action:\n\n")
+
+	for i, item := range menuItems {
+		prefix := "  "
+		if i == m.menuIndex {
+			prefix = "> "
+		}
+
+		b.WriteString(prefix + item + "\n")
+	}
+
+	b.WriteString("\nUse ↑/↓ (or j/k), Enter to select, q to quit.\n")
+
+	return b.String()
+}
+
+func (m *Model) viewForm(title string) string {
+	var b strings.Builder
+
+	b.WriteString(title + "\n\n")
+
+	if len(m.inputs) >= 1 {
+		b.WriteString("Login:\n")
+		b.WriteString(m.inputs[0].View() + "\n\n")
+	}
+
+	if len(m.inputs) >= 2 {
+		b.WriteString("Password:\n")
+		b.WriteString(m.inputs[1].View() + "\n\n")
+	}
+
+	if m.busy {
+		b.WriteString("working...\n")
+	} else {
+		b.WriteString("Tab/↑/↓ to switch field, Enter to submit, Esc to cancel.\n")
+	}
+
+	return b.String()
 }
 
 func (m *Model) runAction() tea.Cmd {
@@ -88,6 +398,75 @@ func (m *Model) runAction() tea.Cmd {
 		}
 
 		return actionResultMsg{text: text}
+	}
+}
+
+func (m *Model) runRegisterCmd() tea.Cmd {
+	login := strings.TrimSpace(m.inputs[0].Value())
+	password := m.inputs[1].Value()
+
+	return func() tea.Msg {
+		resp, err := m.api.Register(context.Background(), clientapi.RegisterRequest{
+			Login:    login,
+			Password: password,
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return actionResultMsg{
+			text: fmt.Sprintf("Registered: login=%s id=%s", resp.Login, resp.ID),
+		}
+	}
+}
+
+func (m *Model) runLoginCmd() tea.Cmd {
+	login := strings.TrimSpace(m.inputs[0].Value())
+	password := m.inputs[1].Value()
+
+	return func() tea.Msg {
+		resp, err := m.api.Login(context.Background(), clientapi.LoginRequest{
+			Login:    login,
+			Password: password,
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		expiresAt, err := time.Parse(time.RFC3339, strings.TrimSpace(resp.ExpiresAt))
+		if err != nil {
+			return actionErrorMsg{err: fmt.Errorf("parse login expires_at: %w", err)}
+		}
+
+		meResp, err := m.api.Me(context.Background(), resp.Token)
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		session := local.Session{
+			Token:     resp.Token,
+			UserID:    meResp.UserID,
+			SessionID: meResp.SessionID,
+			ExpiresAt: expiresAt,
+		}
+
+		if err := m.store.SaveSession(session); err != nil {
+			return actionErrorMsg{err: fmt.Errorf("save local session: %w", err)}
+		}
+
+		return actionResultMsg{
+			text: fmt.Sprintf("Login successful: user_id=%s session_id=%s", meResp.UserID, meResp.SessionID),
+		}
+	}
+}
+
+func (m *Model) runLogoutCmd() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.store.ClearSession(); err != nil {
+			return actionErrorMsg{err: fmt.Errorf("clear local session: %w", err)}
+		}
+
+		return actionResultMsg{text: "Logout successful"}
 	}
 }
 
