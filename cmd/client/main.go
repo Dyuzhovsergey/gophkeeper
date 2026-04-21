@@ -93,7 +93,7 @@ func splitClientArgs(args []string) ([]string, []string) {
 
 		case strings.HasPrefix(arg, "-"):
 			// Неизвестный флаг считаем глобальным.
-			// Ошибку на нём вернёт config.LoadClient.
+			// Ошибку вернёт config.LoadClient.
 			continue
 
 		default:
