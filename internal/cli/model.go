@@ -1334,7 +1334,7 @@ func (m *Model) runCreateCardSecretCmd() tea.Cmd {
 			return actionErrorMsg{err: fmt.Errorf("invalid expiry year: %w", err)}
 		}
 
-		resp, err := m.api.CreateSecret(context.Background(), session.Token, clientapi.SecretUpsertRequest{
+		if _, err := m.api.CreateSecret(context.Background(), session.Token, clientapi.SecretUpsertRequest{
 			Type: "card",
 			Meta: meta,
 			Data: clientapi.CardData{
@@ -1344,14 +1344,18 @@ func (m *Model) runCreateCardSecretCmd() tea.Cmd {
 				ExpiryYear:  uint16(expiryYear),
 				CVV:         cvv,
 			},
-		})
+		}); err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		// После создания сразу перечитываем список,
+		// чтобы новая карта появилась в экране secrets.
+		resp, err := m.api.ListSecrets(context.Background(), session.Token)
 		if err != nil {
 			return actionErrorMsg{err: err}
 		}
 
-		return actionResultMsg{
-			text: fmt.Sprintf("Card secret created: id=%s type=%s", resp.ID, resp.Type),
-		}
+		return secretsListMsg{items: resp.Items}
 	}
 }
 
