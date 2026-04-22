@@ -383,6 +383,18 @@ func (m *Model) updateSecretDetails(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		m.busy = true
 		return m, m.runGetSecretDetailsCmd(m.secretDetails.ID)
+
+	case "e":
+		m.initSecretEditForm()
+		return m, nil
+
+	case "d":
+		if m.secretDetails == nil {
+			return m, nil
+		}
+
+		m.busy = true
+		return m, m.runDeleteSecretCmd(m.secretDetails.ID)
 	}
 
 	return m, nil
