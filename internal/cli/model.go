@@ -102,6 +102,9 @@ type Model struct {
 
 	// secretsIndex хранит индекс выбранного секрета в списке.
 	secretsIndex int
+
+	// secretDetails хранит текущий открытый секрет.
+	secretDetails *clientapi.SecretResponse
 }
 
 // NewModel создаёт стартовую Bubble Tea model клиента.
@@ -179,6 +182,13 @@ func (m *Model) View() string {
 
 	case screenCreateCredentialsSecret:
 		return m.viewSecretForm("Create credentials secret")
+
+	case screenSecretDetails:
+		if m.busy {
+			return "loading secret details...\n"
+		}
+
+		return m.viewSecretDetails()
 
 	default:
 		return ""
