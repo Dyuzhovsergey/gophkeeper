@@ -1258,6 +1258,8 @@ func (m *Model) runLogoutCmd() tea.Cmd {
 
 		m.secrets = nil
 		m.secretsIndex = 0
+		m.secretDetails = nil
+		m.editingSecretID = ""
 
 		return sessionStatusMsg{
 			hasLocalSession: false,
