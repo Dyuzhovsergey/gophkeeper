@@ -187,6 +187,7 @@ func (m *Model) View() string {
 
 	case screenCreateCredentialsSecret:
 		return m.viewSecretForm("Create credentials secret")
+
 	case screenUpdateTextSecret:
 		return m.viewSecretForm("Update text secret")
 
@@ -278,7 +279,12 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case screenMenu:
 			return m.updateMenu(msg)
 
-		case screenRegister, screenLogin, screenCreateTextSecret, screenCreateCredentialsSecret:
+		case screenRegister,
+			screenLogin,
+			screenCreateTextSecret,
+			screenCreateCredentialsSecret,
+			screenUpdateTextSecret,
+			screenUpdateCredentialsSecret:
 			model, cmd, handled := m.updateForm(msg)
 			if handled {
 				return model, cmd
@@ -305,7 +311,9 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.screen == screenRegister ||
 		m.screen == screenLogin ||
 		m.screen == screenCreateTextSecret ||
-		m.screen == screenCreateCredentialsSecret {
+		m.screen == screenCreateCredentialsSecret ||
+		m.screen == screenUpdateTextSecret ||
+		m.screen == screenUpdateCredentialsSecret {
 		var cmds []tea.Cmd
 
 		for i := range m.inputs {
@@ -437,6 +445,10 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, m.runCreateTextSecretCmd(), true
 			case screenCreateCredentialsSecret:
 				return m, m.runCreateCredentialsSecretCmd(), true
+			case screenUpdateTextSecret:
+				return m, m.runUpdateTextSecretCmd(), true
+			case screenUpdateCredentialsSecret:
+				return m, m.runUpdateCredentialsSecretCmd(), true
 			}
 		}
 
@@ -558,6 +570,77 @@ func (m *Model) initSecretForm(screen uiScreen) {
 
 		m.inputs = []textinput.Model{metaInput, loginInput, passwordInput}
 		m.focusIndex = 0
+	}
+}
+
+// initSecretEditForm подготавливает форму редактирования секрета по текущим деталям.
+func (m *Model) initSecretEditForm() {
+	if m.secretDetails == nil {
+		m.screen = screenMessage
+		m.message = "No secret selected for editing"
+		return
+	}
+
+	m.busy = false
+	m.message = ""
+	m.editingSecretID = m.secretDetails.ID
+
+	switch m.secretDetails.Type {
+	case "text":
+		m.screen = screenUpdateTextSecret
+
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.SetValue(m.secretDetails.Meta)
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		textInput := textinput.New()
+		textInput.Placeholder = "Text"
+		if textValue, ok := m.secretDetails.Data["text"].(string); ok {
+			textInput.SetValue(textValue)
+		}
+		textInput.CharLimit = 2048
+		textInput.Width = 50
+
+		m.inputs = []textinput.Model{metaInput, textInput}
+		m.focusIndex = 0
+
+	case "credentials":
+		m.screen = screenUpdateCredentialsSecret
+
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.SetValue(m.secretDetails.Meta)
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		loginInput := textinput.New()
+		loginInput.Placeholder = "Login"
+		if loginValue, ok := m.secretDetails.Data["login"].(string); ok {
+			loginInput.SetValue(loginValue)
+		}
+		loginInput.CharLimit = 256
+		loginInput.Width = 50
+
+		passwordInput := textinput.New()
+		passwordInput.Placeholder = "Password"
+		passwordInput.EchoMode = textinput.EchoPassword
+		passwordInput.EchoCharacter = '•'
+		if passwordValue, ok := m.secretDetails.Data["password"].(string); ok {
+			passwordInput.SetValue(passwordValue)
+		}
+		passwordInput.CharLimit = 256
+		passwordInput.Width = 50
+
+		m.inputs = []textinput.Model{metaInput, loginInput, passwordInput}
+		m.focusIndex = 0
+
+	default:
+		m.screen = screenMessage
+		m.message = "Update is supported only for text and credentials right now"
 	}
 }
 
