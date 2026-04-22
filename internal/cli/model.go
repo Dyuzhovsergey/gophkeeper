@@ -56,6 +56,7 @@ const (
 	screenLogin
 	screenMessage
 	screenCreateCardSecret
+	screenCreateBinarySecret
 	screenSecretsList
 	screenSecretDetails
 	screenCreateTextSecret
