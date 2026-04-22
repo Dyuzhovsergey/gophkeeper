@@ -120,6 +120,9 @@ type Model struct {
 
 	// editingSecretID хранит идентификатор секрета, который сейчас редактируется.
 	editingSecretID string
+
+	// deletingSecretID хранит идентификатор секрета, который пользователь собирается удалить.
+	deletingSecretID string
 }
 
 // NewModel создаёт стартовую Bubble Tea model клиента.
