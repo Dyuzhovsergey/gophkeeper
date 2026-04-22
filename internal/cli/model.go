@@ -58,6 +58,8 @@ const (
 	screenSecretDetails
 	screenCreateTextSecret
 	screenCreateCredentialsSecret
+	screenUpdateTextSecret
+	screenUpdateCredentialsSecret
 )
 
 // menuItems содержит доступные пункты главного меню TUI.
@@ -105,6 +107,9 @@ type Model struct {
 
 	// secretDetails хранит текущий открытый секрет.
 	secretDetails *clientapi.SecretResponse
+
+	// editingSecretID хранит идентификатор секрета, который сейчас редактируется.
+	editingSecretID string
 }
 
 // NewModel создаёт стартовую Bubble Tea model клиента.
@@ -182,6 +187,11 @@ func (m *Model) View() string {
 
 	case screenCreateCredentialsSecret:
 		return m.viewSecretForm("Create credentials secret")
+	case screenUpdateTextSecret:
+		return m.viewSecretForm("Update text secret")
+
+	case screenUpdateCredentialsSecret:
+		return m.viewSecretForm("Update credentials secret")
 
 	case screenSecretDetails:
 		if m.busy {
