@@ -291,6 +291,8 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen = screenSecretsList
 		m.secrets = msg.items
 		m.secretsIndex = 0
+		m.secretDetails = nil
+		m.deletingSecretID = ""
 		return m, nil
 
 	case secretDetailsMsg:
@@ -425,8 +427,33 @@ func (m *Model) updateSecretDetails(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		m.deletingSecretID = m.secretDetails.ID
+		m.screen = screenDeleteConfirm
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// updateDeleteConfirm обрабатывает клавиши на экране подтверждения удаления.
+func (m *Model) updateDeleteConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "n", "esc":
+		m.deletingSecretID = ""
+		m.screen = screenSecretDetails
+		return m, nil
+
+	case "y", "enter":
+		if strings.TrimSpace(m.deletingSecretID) == "" {
+			m.screen = screenSecretDetails
+			return m, nil
+		}
+
 		m.busy = true
-		return m, m.runDeleteSecretCmd(m.secretDetails.ID)
+		return m, m.runDeleteSecretCmd(m.deletingSecretID)
 	}
 
 	return m, nil
@@ -995,6 +1022,26 @@ func (m *Model) viewSecretDetails() string {
 	}
 
 	b.WriteString("\nPress Enter or Esc to return, r to reload, e to edit, d to delete.\n")
+
+	return b.String()
+}
+
+// viewDeleteConfirm формирует экран подтверждения удаления секрета.
+func (m *Model) viewDeleteConfirm() string {
+	var b strings.Builder
+
+	b.WriteString("Delete secret\n\n")
+
+	if m.secretDetails != nil {
+		b.WriteString("You are about to delete:\n\n")
+		b.WriteString("ID: " + m.secretDetails.ID + "\n")
+		b.WriteString("Type: " + m.secretDetails.Type + "\n")
+		b.WriteString("Meta: " + m.secretDetails.Meta + "\n")
+	} else {
+		b.WriteString("No secret selected for deletion.\n")
+	}
+
+	b.WriteString("\nPress y or Enter to confirm, n or Esc to cancel.\n")
 
 	return b.String()
 }
@@ -1619,6 +1666,7 @@ func (m *Model) runLogoutCmd() tea.Cmd {
 		m.secretsIndex = 0
 		m.secretDetails = nil
 		m.editingSecretID = ""
+		m.deletingSecretID = ""
 
 		return sessionStatusMsg{
 			hasLocalSession: false,
