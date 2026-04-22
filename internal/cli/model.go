@@ -63,6 +63,7 @@ const (
 	screenCreateBinarySecret
 	screenSecretsList
 	screenSecretDetails
+	screenDeleteConfirm
 	screenCreateTextSecret
 	screenCreateCredentialsSecret
 	screenUpdateTextSecret
