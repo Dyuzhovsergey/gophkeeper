@@ -54,6 +54,7 @@ const (
 	screenRegister
 	screenLogin
 	screenMessage
+	screenCreateCardSecret
 	screenSecretsList
 	screenSecretDetails
 	screenCreateTextSecret
@@ -71,6 +72,7 @@ var menuItems = []string{
 	"secrets",
 	"add text",
 	"add credentials",
+	"add card",
 	"version",
 	"quit",
 }
@@ -188,6 +190,9 @@ func (m *Model) View() string {
 	case screenCreateCredentialsSecret:
 		return m.viewSecretForm("Create credentials secret")
 
+	case screenCreateCardSecret:
+		return m.viewSecretForm("Create card secret")
+
 	case screenUpdateTextSecret:
 		return m.viewSecretForm("Update text secret")
 
@@ -283,6 +288,7 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			screenLogin,
 			screenCreateTextSecret,
 			screenCreateCredentialsSecret,
+			screenCreateCardSecret,
 			screenUpdateTextSecret,
 			screenUpdateCredentialsSecret:
 			model, cmd, handled := m.updateForm(msg)
