@@ -195,6 +195,9 @@ func (m *Model) View() string {
 
 		return m.viewSecretsList()
 
+	case screenDeleteConfirm:
+		return m.viewDeleteConfirm()
+
 	case screenCreateTextSecret:
 		return m.viewSecretForm("Create text secret")
 
@@ -319,6 +322,9 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case screenSecretDetails:
 			return m.updateSecretDetails(msg)
+
+		case screenDeleteConfirm:
+			return m.updateDeleteConfirm(msg)
 
 		case screenMessage:
 			switch msg.String() {
