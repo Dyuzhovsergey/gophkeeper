@@ -318,6 +318,7 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen == screenLogin ||
 		m.screen == screenCreateTextSecret ||
 		m.screen == screenCreateCredentialsSecret ||
+		m.screen == screenCreateCardSecret ||
 		m.screen == screenUpdateTextSecret ||
 		m.screen == screenUpdateCredentialsSecret {
 		var cmds []tea.Cmd
@@ -463,6 +464,8 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, m.runCreateTextSecretCmd(), true
 			case screenCreateCredentialsSecret:
 				return m, m.runCreateCredentialsSecretCmd(), true
+			case screenCreateCardSecret:
+				return m, m.runCreateCardSecretCmd(), true
 			case screenUpdateTextSecret:
 				return m, m.runUpdateTextSecretCmd(), true
 			case screenUpdateCredentialsSecret:
@@ -513,6 +516,10 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 
 	case "add credentials":
 		m.initSecretForm(screenCreateCredentialsSecret)
+		return m, nil
+
+	case "add card":
+		m.initSecretForm(screenCreateCardSecret)
 		return m, nil
 
 	case "quit":
@@ -587,6 +594,50 @@ func (m *Model) initSecretForm(screen uiScreen) {
 		passwordInput.Width = 50
 
 		m.inputs = []textinput.Model{metaInput, loginInput, passwordInput}
+		m.focusIndex = 0
+
+	case screenCreateCardSecret:
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		numberInput := textinput.New()
+		numberInput.Placeholder = "Card number"
+		numberInput.CharLimit = 32
+		numberInput.Width = 50
+
+		cardholderInput := textinput.New()
+		cardholderInput.Placeholder = "Cardholder"
+		cardholderInput.CharLimit = 256
+		cardholderInput.Width = 50
+
+		expiryMonthInput := textinput.New()
+		expiryMonthInput.Placeholder = "Expiry month"
+		expiryMonthInput.CharLimit = 2
+		expiryMonthInput.Width = 50
+
+		expiryYearInput := textinput.New()
+		expiryYearInput.Placeholder = "Expiry year"
+		expiryYearInput.CharLimit = 4
+		expiryYearInput.Width = 50
+
+		cvvInput := textinput.New()
+		cvvInput.Placeholder = "CVV"
+		cvvInput.EchoMode = textinput.EchoPassword
+		cvvInput.EchoCharacter = '•'
+		cvvInput.CharLimit = 4
+		cvvInput.Width = 50
+
+		m.inputs = []textinput.Model{
+			metaInput,
+			numberInput,
+			cardholderInput,
+			expiryMonthInput,
+			expiryYearInput,
+			cvvInput,
+		}
 		m.focusIndex = 0
 	}
 }
@@ -789,6 +840,30 @@ func (m *Model) viewSecretDetails() string {
 		b.WriteString(loginValue + "\n\n")
 		b.WriteString("Password:\n")
 		b.WriteString(passwordValue + "\n")
+
+	case "card":
+		numberValue, _ := item.Data["number"].(string)
+		cardholderValue, _ := item.Data["cardholder"].(string)
+
+		b.WriteString("Card number:\n")
+		b.WriteString(numberValue + "\n\n")
+		b.WriteString("Cardholder:\n")
+		b.WriteString(cardholderValue + "\n\n")
+
+		if expiryMonth, ok := item.Data["expiry_month"]; ok {
+			b.WriteString("Expiry month:\n")
+			b.WriteString(fmt.Sprintf("%v\n\n", expiryMonth))
+		}
+
+		if expiryYear, ok := item.Data["expiry_year"]; ok {
+			b.WriteString("Expiry year:\n")
+			b.WriteString(fmt.Sprintf("%v\n\n", expiryYear))
+		}
+
+		if cvvValue, ok := item.Data["cvv"].(string); ok {
+			b.WriteString("CVV:\n")
+			b.WriteString(cvvValue + "\n")
+		}
 
 	default:
 		b.WriteString("Payload:\n")
