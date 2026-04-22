@@ -333,9 +333,9 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen == screenCreateTextSecret ||
 		m.screen == screenCreateCredentialsSecret ||
 		m.screen == screenCreateCardSecret ||
-		m.screen == screenCreateBinarySecret ||
 		m.screen == screenUpdateTextSecret ||
-		m.screen == screenUpdateCredentialsSecret {
+		m.screen == screenUpdateCredentialsSecret ||
+		m.screen == screenUpdateCardSecret {
 		var cmds []tea.Cmd
 
 		for i := range m.inputs {
@@ -481,12 +481,12 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, m.runCreateCredentialsSecretCmd(), true
 			case screenCreateCardSecret:
 				return m, m.runCreateCardSecretCmd(), true
-			case screenCreateBinarySecret:
-				return m, m.runCreateBinarySecretCmd(), true
 			case screenUpdateTextSecret:
 				return m, m.runUpdateTextSecretCmd(), true
 			case screenUpdateCredentialsSecret:
 				return m, m.runUpdateCredentialsSecretCmd(), true
+			case screenUpdateCardSecret:
+				return m, m.runUpdateCardSecretCmd(), true
 			}
 		}
 
@@ -747,9 +747,71 @@ func (m *Model) initSecretEditForm() {
 		m.inputs = []textinput.Model{metaInput, loginInput, passwordInput}
 		m.focusIndex = 0
 
+	case "card":
+		m.screen = screenUpdateCardSecret
+
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.SetValue(m.secretDetails.Meta)
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		numberInput := textinput.New()
+		numberInput.Placeholder = "Card number"
+		if numberValue, ok := m.secretDetails.Data["number"].(string); ok {
+			numberInput.SetValue(numberValue)
+		}
+		numberInput.CharLimit = 32
+		numberInput.Width = 50
+
+		cardholderInput := textinput.New()
+		cardholderInput.Placeholder = "Cardholder"
+		if cardholderValue, ok := m.secretDetails.Data["cardholder"].(string); ok {
+			cardholderInput.SetValue(cardholderValue)
+		}
+		cardholderInput.CharLimit = 256
+		cardholderInput.Width = 50
+
+		expiryMonthInput := textinput.New()
+		expiryMonthInput.Placeholder = "Expiry month"
+		if expiryMonthValue, ok := m.secretDetails.Data["expiry_month"]; ok {
+			expiryMonthInput.SetValue(fmt.Sprintf("%v", expiryMonthValue))
+		}
+		expiryMonthInput.CharLimit = 2
+		expiryMonthInput.Width = 50
+
+		expiryYearInput := textinput.New()
+		expiryYearInput.Placeholder = "Expiry year"
+		if expiryYearValue, ok := m.secretDetails.Data["expiry_year"]; ok {
+			expiryYearInput.SetValue(fmt.Sprintf("%v", expiryYearValue))
+		}
+		expiryYearInput.CharLimit = 4
+		expiryYearInput.Width = 50
+
+		cvvInput := textinput.New()
+		cvvInput.Placeholder = "CVV"
+		cvvInput.EchoMode = textinput.EchoPassword
+		cvvInput.EchoCharacter = '•'
+		if cvvValue, ok := m.secretDetails.Data["cvv"].(string); ok {
+			cvvInput.SetValue(cvvValue)
+		}
+		cvvInput.CharLimit = 4
+		cvvInput.Width = 50
+
+		m.inputs = []textinput.Model{
+			metaInput,
+			numberInput,
+			cardholderInput,
+			expiryMonthInput,
+			expiryYearInput,
+			cvvInput,
+		}
+		m.focusIndex = 0
+
 	default:
 		m.screen = screenMessage
-		m.message = "Update is supported only for text and credentials right now"
+		m.message = "Update is supported only for text, credentials and card right now"
 	}
 }
 
