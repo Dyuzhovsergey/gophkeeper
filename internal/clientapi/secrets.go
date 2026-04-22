@@ -151,3 +151,16 @@ func (c *Client) UpdateSecret(ctx context.Context, token, secretID string, req S
 
 	return &resp, nil
 }
+
+// DeleteSecret удаляет секрет пользователя.
+func (c *Client) DeleteSecret(ctx context.Context, token, secretID string) error {
+	headers := map[string]string{
+		"Authorization": "Bearer " + token,
+	}
+
+	if err := c.doJSON(ctx, "DELETE", "/api/secrets/"+secretID, nil, nil, headers); err != nil {
+		return fmt.Errorf("delete secret request: %w", err)
+	}
+
+	return nil
+}
