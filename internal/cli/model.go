@@ -67,6 +67,7 @@ const (
 	screenCreateCredentialsSecret
 	screenUpdateTextSecret
 	screenUpdateCredentialsSecret
+	screenUpdateCardSecret
 )
 
 var menuItems = []string{
