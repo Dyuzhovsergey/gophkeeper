@@ -302,9 +302,9 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			screenCreateTextSecret,
 			screenCreateCredentialsSecret,
 			screenCreateCardSecret,
-			screenCreateBinarySecret,
 			screenUpdateTextSecret,
-			screenUpdateCredentialsSecret:
+			screenUpdateCredentialsSecret,
+			screenUpdateCardSecret:
 			model, cmd, handled := m.updateForm(msg)
 			if handled {
 				return model, cmd
