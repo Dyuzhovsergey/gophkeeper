@@ -789,7 +789,7 @@ func (m *Model) viewSecretDetails() string {
 		b.WriteString(fmt.Sprintf("%v\n", item.Data))
 	}
 
-	b.WriteString("\nPress Enter or Esc to return, r to reload.\n")
+	b.WriteString("\nPress Enter or Esc to return, r to reload, e to edit, d to delete.\n")
 
 	return b.String()
 }
