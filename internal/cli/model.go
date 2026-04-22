@@ -2,8 +2,12 @@ package cli
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -294,6 +298,7 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			screenCreateTextSecret,
 			screenCreateCredentialsSecret,
 			screenCreateCardSecret,
+			screenCreateBinarySecret,
 			screenUpdateTextSecret,
 			screenUpdateCredentialsSecret:
 			model, cmd, handled := m.updateForm(msg)
@@ -324,6 +329,7 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen == screenCreateTextSecret ||
 		m.screen == screenCreateCredentialsSecret ||
 		m.screen == screenCreateCardSecret ||
+		m.screen == screenCreateBinarySecret ||
 		m.screen == screenUpdateTextSecret ||
 		m.screen == screenUpdateCredentialsSecret {
 		var cmds []tea.Cmd
@@ -471,6 +477,8 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, m.runCreateCredentialsSecretCmd(), true
 			case screenCreateCardSecret:
 				return m, m.runCreateCardSecretCmd(), true
+			case screenCreateBinarySecret:
+				return m, m.runCreateBinarySecretCmd(), true
 			case screenUpdateTextSecret:
 				return m, m.runUpdateTextSecretCmd(), true
 			case screenUpdateCredentialsSecret:
@@ -525,6 +533,10 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 
 	case "add card":
 		m.initSecretForm(screenCreateCardSecret)
+		return m, nil
+
+	case "add file":
+		m.initSecretForm(screenCreateBinarySecret)
 		return m, nil
 
 	case "quit":
@@ -644,6 +656,25 @@ func (m *Model) initSecretForm(screen uiScreen) {
 			cvvInput,
 		}
 		m.focusIndex = 0
+
+	case screenCreateBinarySecret:
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		pathInput := textinput.New()
+		pathInput.Placeholder = "File path"
+		pathInput.CharLimit = 4096
+		pathInput.Width = 50
+
+		m.inputs = []textinput.Model{
+			metaInput,
+			pathInput,
+		}
+		m.focusIndex = 0
+
 	}
 }
 
@@ -869,6 +900,18 @@ func (m *Model) viewSecretDetails() string {
 			b.WriteString("CVV:\n")
 			b.WriteString(cvvValue + "\n")
 		}
+
+	case "binary":
+		filenameValue, _ := item.Data["filename"].(string)
+		mimeValue, _ := item.Data["mime_type"].(string)
+		contentBase64Value, _ := item.Data["content_base64"].(string)
+
+		b.WriteString("Filename:\n")
+		b.WriteString(filenameValue + "\n\n")
+		b.WriteString("MIME type:\n")
+		b.WriteString(mimeValue + "\n\n")
+		b.WriteString("Content length (base64 chars):\n")
+		b.WriteString(fmt.Sprintf("%d\n", len(contentBase64Value)))
 
 	default:
 		b.WriteString("Payload:\n")
@@ -1363,6 +1406,57 @@ func (m *Model) runCreateCardSecretCmd() tea.Cmd {
 	}
 }
 
+// runCreateBinarySecretCmd создаёт секрет типа binary через интерактивную форму.
+func (m *Model) runCreateBinarySecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	filePath := strings.TrimSpace(m.inputs[1].Value())
+
+	return func() tea.Msg {
+		if filePath == "" {
+			return actionErrorMsg{err: fmt.Errorf("file path is empty")}
+		}
+
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return actionErrorMsg{err: fmt.Errorf("read file: %w", err)}
+		}
+
+		filename := filepath.Base(filePath)
+		mimeType := mime.TypeByExtension(filepath.Ext(filename))
+		if strings.TrimSpace(mimeType) == "" {
+			mimeType = "application/octet-stream"
+		}
+
+		if _, err := m.api.CreateSecret(context.Background(), session.Token, clientapi.SecretUpsertRequest{
+			Type: "binary",
+			Meta: meta,
+			Data: clientapi.BinaryData{
+				Filename:      filename,
+				MIMEType:      mimeType,
+				ContentBase64: encodeBase64(content),
+			},
+		}); err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		resp, err := m.api.ListSecrets(context.Background(), session.Token)
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretsListMsg{items: resp.Items}
+	}
+}
+
 // runDeleteSecretCmd удаляет секрет пользователя по идентификатору.
 func (m *Model) runDeleteSecretCmd(secretID string) tea.Cmd {
 	return func() tea.Msg {
@@ -1490,4 +1584,9 @@ func (m *Model) execute(ctx context.Context) (string, error) {
 // IsNotLoggedInError показывает, что локальная сессия отсутствует.
 func IsNotLoggedInError(err error) bool {
 	return errors.Is(err, local.ErrSessionNotFound)
+}
+
+// encodeBase64 кодирует бинарные данные в base64-строку.
+func encodeBase64(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
 }
