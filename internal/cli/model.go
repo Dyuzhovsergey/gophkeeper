@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1300,6 +1301,56 @@ func (m *Model) runCreateCredentialsSecretCmd() tea.Cmd {
 
 		return actionResultMsg{
 			text: fmt.Sprintf("Credentials secret created: id=%s type=%s", resp.ID, resp.Type),
+		}
+	}
+}
+
+// runCreateCardSecretCmd создаёт секрет типа card через интерактивную форму.
+func (m *Model) runCreateCardSecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	number := strings.TrimSpace(m.inputs[1].Value())
+	cardholder := strings.TrimSpace(m.inputs[2].Value())
+	expiryMonthRaw := strings.TrimSpace(m.inputs[3].Value())
+	expiryYearRaw := strings.TrimSpace(m.inputs[4].Value())
+	cvv := strings.TrimSpace(m.inputs[5].Value())
+
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		expiryMonth, err := strconv.ParseUint(expiryMonthRaw, 10, 8)
+		if err != nil {
+			return actionErrorMsg{err: fmt.Errorf("invalid expiry month: %w", err)}
+		}
+
+		expiryYear, err := strconv.ParseUint(expiryYearRaw, 10, 16)
+		if err != nil {
+			return actionErrorMsg{err: fmt.Errorf("invalid expiry year: %w", err)}
+		}
+
+		resp, err := m.api.CreateSecret(context.Background(), session.Token, clientapi.SecretUpsertRequest{
+			Type: "card",
+			Meta: meta,
+			Data: clientapi.CardData{
+				Number:      number,
+				Cardholder:  cardholder,
+				ExpiryMonth: uint8(expiryMonth),
+				ExpiryYear:  uint16(expiryYear),
+				CVV:         cvv,
+			},
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return actionResultMsg{
+			text: fmt.Sprintf("Card secret created: id=%s type=%s", resp.ID, resp.Type),
 		}
 	}
 }
