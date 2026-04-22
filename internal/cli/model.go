@@ -65,7 +65,6 @@ const (
 	screenUpdateCredentialsSecret
 )
 
-// menuItems содержит доступные пункты главного меню TUI.
 var menuItems = []string{
 	"register",
 	"login",
@@ -75,6 +74,7 @@ var menuItems = []string{
 	"add text",
 	"add credentials",
 	"add card",
+	"add file",
 	"version",
 	"quit",
 }
