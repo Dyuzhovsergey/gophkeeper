@@ -1125,6 +1125,37 @@ func (m *Model) runCreateTextSecretCmd() tea.Cmd {
 	}
 }
 
+// runUpdateTextSecretCmd обновляет текстовый секрет через интерактивную форму.
+func (m *Model) runUpdateTextSecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	text := strings.TrimSpace(m.inputs[1].Value())
+	secretID := strings.TrimSpace(m.editingSecretID)
+
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		resp, err := m.api.UpdateSecret(context.Background(), session.Token, secretID, clientapi.SecretUpsertRequest{
+			Type: "text",
+			Meta: meta,
+			Data: clientapi.TextData{
+				Text: text,
+			},
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretDetailsMsg{item: *resp}
+	}
+}
+
 // runCreateCredentialsSecretCmd создаёт секрет типа credentials через интерактивную форму.
 func (m *Model) runCreateCredentialsSecretCmd() tea.Cmd {
 	meta := strings.TrimSpace(m.inputs[0].Value())
