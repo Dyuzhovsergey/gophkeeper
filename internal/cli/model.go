@@ -257,6 +257,12 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.secretsIndex = 0
 		return m, nil
 
+	case secretDetailsMsg:
+		m.busy = false
+		m.screen = screenSecretDetails
+		m.secretDetails = &msg.item
+		return m, nil
+
 	case tea.KeyMsg:
 		switch m.screen {
 		case screenMenu:
@@ -270,6 +276,9 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case screenSecretsList:
 			return m.updateSecretsList(msg)
+
+		case screenSecretDetails:
+			return m.updateSecretDetails(msg)
 
 		case screenMessage:
 			switch msg.String() {
@@ -301,31 +310,6 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateMenu обрабатывает нажатия клавиш на экране главного меню.
-func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "ctrl+c", "q":
-		return m, tea.Quit
-
-	case "up", "k":
-		if m.menuIndex > 0 {
-			m.menuIndex--
-		}
-		return m, nil
-
-	case "down", "j":
-		if m.menuIndex < len(menuItems)-1 {
-			m.menuIndex++
-		}
-		return m, nil
-
-	case "enter":
-		return m.selectMenuItem()
-	}
-
-	return m, nil
-}
-
 // updateSecretsList обрабатывает клавиши на экране списка секретов.
 func (m *Model) updateSecretsList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -351,6 +335,61 @@ func (m *Model) updateSecretsList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.busy = true
 		return m, m.runListSecretsCmd()
+
+	case "enter":
+		if len(m.secrets) == 0 {
+			return m, nil
+		}
+
+		m.busy = true
+		return m, m.runGetSecretDetailsCmd(m.secrets[m.secretsIndex].ID)
+	}
+
+	return m, nil
+}
+
+// updateSecretDetails обрабатывает клавиши на экране деталей секрета.
+func (m *Model) updateSecretDetails(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "esc", "enter":
+		m.screen = screenSecretsList
+		return m, nil
+
+	case "r":
+		if m.secretDetails == nil {
+			return m, nil
+		}
+
+		m.busy = true
+		return m, m.runGetSecretDetailsCmd(m.secretDetails.ID)
+	}
+
+	return m, nil
+}
+
+// updateMenu обрабатывает нажатия клавиш на экране главного меню.
+func (m *Model) updateMenu(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "q":
+		return m, tea.Quit
+
+	case "up", "k":
+		if m.menuIndex > 0 {
+			m.menuIndex--
+		}
+		return m, nil
+
+	case "down", "j":
+		if m.menuIndex < len(menuItems)-1 {
+			m.menuIndex++
+		}
+		return m, nil
+
+	case "enter":
+		return m.selectMenuItem()
 	}
 
 	return m, nil
@@ -599,7 +638,53 @@ func (m *Model) viewSecretsList() string {
 		b.WriteString(prefix + formatSecretListItem(item) + "\n")
 	}
 
-	b.WriteString("\nUse ↑/↓ (or j/k), Esc to return, r to reload.\n")
+	b.WriteString("\nUse ↑/↓ (or j/k), Enter to open, r to reload, Esc to return.\n")
+
+	return b.String()
+}
+
+// viewSecretDetails формирует текстовое представление одного секрета.
+func (m *Model) viewSecretDetails() string {
+	var b strings.Builder
+
+	if m.secretDetails == nil {
+		return "Secret details are not loaded.\n\nPress Enter or Esc to return.\n"
+	}
+
+	item := m.secretDetails
+
+	b.WriteString("Secret details\n\n")
+	b.WriteString("ID: " + item.ID + "\n")
+	b.WriteString("Type: " + item.Type + "\n")
+	b.WriteString("Meta: " + item.Meta + "\n")
+	b.WriteString(fmt.Sprintf("Version: %d\n", item.Version))
+	b.WriteString("CreatedAt: " + item.CreatedAt + "\n")
+	b.WriteString("UpdatedAt: " + item.UpdatedAt + "\n\n")
+
+	switch item.Type {
+	case "text":
+		if textValue, ok := item.Data["text"].(string); ok {
+			b.WriteString("Text:\n")
+			b.WriteString(textValue + "\n")
+		} else {
+			b.WriteString("Text:\n<invalid text payload>\n")
+		}
+
+	case "credentials":
+		loginValue, _ := item.Data["login"].(string)
+		passwordValue, _ := item.Data["password"].(string)
+
+		b.WriteString("Login:\n")
+		b.WriteString(loginValue + "\n\n")
+		b.WriteString("Password:\n")
+		b.WriteString(passwordValue + "\n")
+
+	default:
+		b.WriteString("Payload:\n")
+		b.WriteString(fmt.Sprintf("%v\n", item.Data))
+	}
+
+	b.WriteString("\nPress Enter or Esc to return, r to reload.\n")
 
 	return b.String()
 }
@@ -879,6 +964,27 @@ func (m *Model) runListSecretsCmd() tea.Cmd {
 		}
 
 		return secretsListMsg{items: resp.Items}
+	}
+}
+
+// runGetSecretDetailsCmd загружает один секрет по идентификатору.
+func (m *Model) runGetSecretDetailsCmd(secretID string) tea.Cmd {
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		resp, err := m.api.GetSecretByID(context.Background(), session.Token, secretID)
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretDetailsMsg{item: *resp}
 	}
 }
 
