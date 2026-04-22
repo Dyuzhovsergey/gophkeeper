@@ -209,6 +209,9 @@ func (m *Model) View() string {
 	case screenUpdateCredentialsSecret:
 		return m.viewSecretForm("Update credentials secret")
 
+	case screenUpdateCardSecret:
+		return m.viewSecretForm("Update card secret")
+
 	case screenSecretDetails:
 		if m.busy {
 			return "loading secret details...\n"
