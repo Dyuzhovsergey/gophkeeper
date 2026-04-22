@@ -1156,6 +1156,39 @@ func (m *Model) runUpdateTextSecretCmd() tea.Cmd {
 	}
 }
 
+// runUpdateCredentialsSecretCmd обновляет секрет типа credentials через интерактивную форму.
+func (m *Model) runUpdateCredentialsSecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	login := strings.TrimSpace(m.inputs[1].Value())
+	password := m.inputs[2].Value()
+	secretID := strings.TrimSpace(m.editingSecretID)
+
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		resp, err := m.api.UpdateSecret(context.Background(), session.Token, secretID, clientapi.SecretUpsertRequest{
+			Type: "credentials",
+			Meta: meta,
+			Data: clientapi.CredentialsData{
+				Login:    login,
+				Password: password,
+			},
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretDetailsMsg{item: *resp}
+	}
+}
+
 // runCreateCredentialsSecretCmd создаёт секрет типа credentials через интерактивную форму.
 func (m *Model) runCreateCredentialsSecretCmd() tea.Cmd {
 	meta := strings.TrimSpace(m.inputs[0].Value())
@@ -1187,6 +1220,32 @@ func (m *Model) runCreateCredentialsSecretCmd() tea.Cmd {
 		return actionResultMsg{
 			text: fmt.Sprintf("Credentials secret created: id=%s type=%s", resp.ID, resp.Type),
 		}
+	}
+}
+
+// runDeleteSecretCmd удаляет секрет пользователя по идентификатору.
+func (m *Model) runDeleteSecretCmd(secretID string) tea.Cmd {
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		if err := m.api.DeleteSecret(context.Background(), session.Token, secretID); err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		// После удаления сразу перечитываем список.
+		resp, err := m.api.ListSecrets(context.Background(), session.Token)
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretsListMsg{items: resp.Items}
 	}
 }
 
