@@ -136,3 +136,18 @@ func (c *Client) GetSecretByID(ctx context.Context, token, secretID string) (*Se
 
 	return &resp, nil
 }
+
+// UpdateSecret обновляет существующий секрет пользователя.
+func (c *Client) UpdateSecret(ctx context.Context, token, secretID string, req SecretUpsertRequest) (*SecretResponse, error) {
+	var resp SecretResponse
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + token,
+	}
+
+	if err := c.doJSON(ctx, "PUT", "/api/secrets/"+secretID, req, &resp, headers); err != nil {
+		return nil, fmt.Errorf("update secret request: %w", err)
+	}
+
+	return &resp, nil
+}
