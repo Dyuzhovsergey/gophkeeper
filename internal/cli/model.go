@@ -195,6 +195,9 @@ func (m *Model) View() string {
 	case screenCreateCardSecret:
 		return m.viewSecretForm("Create card secret")
 
+	case screenCreateBinarySecret:
+		return m.viewSecretForm("Create binary secret")
+
 	case screenUpdateTextSecret:
 		return m.viewSecretForm("Update text secret")
 
