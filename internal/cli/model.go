@@ -41,6 +41,11 @@ type secretsListMsg struct {
 	items []clientapi.SecretResponse
 }
 
+// secretDetailsMsg передаёт в модель детали одного секрета.
+type secretDetailsMsg struct {
+	item clientapi.SecretResponse
+}
+
 // uiScreen описывает текущий экран TUI-клиента.
 type uiScreen int
 
@@ -50,6 +55,7 @@ const (
 	screenLogin
 	screenMessage
 	screenSecretsList
+	screenSecretDetails
 	screenCreateTextSecret
 	screenCreateCredentialsSecret
 )
