@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 const (
-	defaultServerRunAddress = "localhost:8080"
+	defaultServerRunAddress      = "localhost:8080"
+	defaultServerShutdownTimeout = 5 * time.Second
 
-	envServerRunAddress  = "GOPHKEEPER_SERVER_RUN_ADDRESS"
-	envServerLogLevel    = "GOPHKEEPER_SERVER_LOG_LEVEL"
-	envServerDatabaseDSN = "GOPHKEEPER_SERVER_DATABASE_DSN"
-	envServerJWTSecret   = "GOPHKEEPER_SERVER_JWT_SECRET"
+	envServerRunAddress      = "GOPHKEEPER_SERVER_RUN_ADDRESS"
+	envServerLogLevel        = "GOPHKEEPER_SERVER_LOG_LEVEL"
+	envServerDatabaseDSN     = "GOPHKEEPER_SERVER_DATABASE_DSN"
+	envServerJWTSecret       = "GOPHKEEPER_SERVER_JWT_SECRET"
+	envServerShutdownTimeout = "GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT"
 )
 
 // ServerConfig описывает конфигурацию серверного приложения.
