@@ -173,9 +173,8 @@ GophKeeper — клиент-серверный менеджер приватны
 Нужно создать базу данных и пользователя, затем убедиться, что доступ по DSN работает.
 Пример DSN:
 
-```
+```bash
 postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable
-```
 
 ## Проверка подключения:
 
