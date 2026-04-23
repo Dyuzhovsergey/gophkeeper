@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Dyuzhovsergey/gophkeeper/internal/config"
 	"github.com/Dyuzhovsergey/gophkeeper/internal/logger"
@@ -28,7 +30,8 @@ func main() {
 }
 
 func run() error {
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	cfg, err := config.LoadServer(os.Args[1:])
 	if err != nil {
