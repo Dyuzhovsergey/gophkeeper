@@ -3,6 +3,7 @@ module github.com/Dyuzhovsergey/gophkeeper
 go 1.25.4
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/golang-jwt/jwt/v5 v5.3.1
