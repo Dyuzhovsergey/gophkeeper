@@ -1662,6 +1662,54 @@ func (m *Model) runCreateBinarySecretCmd() tea.Cmd {
 	}
 }
 
+// runUpdateBinarySecretCmd обновляет секрет типа binary через интерактивную форму.
+func (m *Model) runUpdateBinarySecretCmd() tea.Cmd {
+	meta := strings.TrimSpace(m.inputs[0].Value())
+	filePath := strings.TrimSpace(m.inputs[1].Value())
+	secretID := strings.TrimSpace(m.editingSecretID)
+
+	return func() tea.Msg {
+		if filePath == "" {
+			return actionErrorMsg{err: fmt.Errorf("file path is empty")}
+		}
+
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return actionErrorMsg{err: fmt.Errorf("read file: %w", err)}
+		}
+
+		filename := filepath.Base(filePath)
+		mimeType := mime.TypeByExtension(filepath.Ext(filename))
+		if strings.TrimSpace(mimeType) == "" {
+			mimeType = "application/octet-stream"
+		}
+
+		resp, err := m.api.UpdateSecret(context.Background(), session.Token, secretID, clientapi.SecretUpsertRequest{
+			Type: "binary",
+			Meta: meta,
+			Data: clientapi.BinaryData{
+				Filename:      filename,
+				MIMEType:      mimeType,
+				ContentBase64: encodeBase64(content),
+			},
+		})
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		return secretDetailsMsg{item: *resp}
+	}
+}
+
 // runDeleteSecretCmd удаляет секрет пользователя по идентификатору.
 func (m *Model) runDeleteSecretCmd(secretID string) tea.Cmd {
 	return func() tea.Msg {
