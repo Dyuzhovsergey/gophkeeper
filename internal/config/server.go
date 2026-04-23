@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 )
@@ -33,15 +34,19 @@ type ServerConfig struct {
 
 	// JWTSecret — секрет подписи JWT.
 	JWTSecret string
+
+	// ShutdownTimeout — максимальное время на корректное завершение HTTP-сервера.
+	ShutdownTimeout time.Duration
 }
 
 // DefaultServerConfig возвращает серверную конфигурацию по умолчанию.
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		RunAddress:  defaultServerRunAddress,
-		LogLevel:    defaultLogLevel,
-		DatabaseDSN: "",
-		JWTSecret:   "",
+		RunAddress:      defaultServerRunAddress,
+		LogLevel:        defaultLogLevel,
+		DatabaseDSN:     "",
+		JWTSecret:       "",
+		ShutdownTimeout: defaultServerShutdownTimeout,
 	}
 }
 
@@ -61,6 +66,7 @@ func LoadServer(args []string) (ServerConfig, error) {
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "logger level")
 	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL DSN")
 	fs.StringVar(&cfg.JWTSecret, "jwt-secret", cfg.JWTSecret, "JWT signing secret")
+	fs.DurationVar(&cfg.ShutdownTimeout, "shutdown-timeout", cfg.ShutdownTimeout, "graceful shutdown timeout")
 
 	if err := fs.Parse(args); err != nil {
 		return ServerConfig{}, err
@@ -70,6 +76,17 @@ func LoadServer(args []string) (ServerConfig, error) {
 	applyStringEnv(&cfg.LogLevel, envServerLogLevel)
 	applyStringEnv(&cfg.DatabaseDSN, envServerDatabaseDSN)
 	applyStringEnv(&cfg.JWTSecret, envServerJWTSecret)
+
+	if raw, ok := os.LookupEnv(envServerShutdownTimeout); ok {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			timeout, err := time.ParseDuration(raw)
+			if err != nil {
+				return ServerConfig{}, fmt.Errorf("parse server shutdown timeout: %w", err)
+			}
+			cfg.ShutdownTimeout = timeout
+		}
+	}
 
 	cfg.RunAddress = strings.TrimSpace(cfg.RunAddress)
 	cfg.LogLevel = normalizeLogLevel(cfg.LogLevel)
