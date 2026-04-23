@@ -69,6 +69,7 @@ const (
 	screenUpdateTextSecret
 	screenUpdateCredentialsSecret
 	screenUpdateCardSecret
+	screenUpdateBinarySecret
 )
 
 var menuItems = []string{
@@ -219,6 +220,9 @@ func (m *Model) View() string {
 	case screenUpdateCardSecret:
 		return m.viewSecretForm("Update card secret")
 
+	case screenUpdateBinarySecret:
+		return m.viewSecretForm("Update binary secret")
+
 	case screenSecretDetails:
 		if m.busy {
 			return "loading secret details...\n"
@@ -311,9 +315,11 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 			screenCreateTextSecret,
 			screenCreateCredentialsSecret,
 			screenCreateCardSecret,
+			screenCreateBinarySecret,
 			screenUpdateTextSecret,
 			screenUpdateCredentialsSecret,
-			screenUpdateCardSecret:
+			screenUpdateCardSecret,
+			screenUpdateBinarySecret:
 			model, cmd, handled := m.updateForm(msg)
 			if handled {
 				return model, cmd
@@ -345,9 +351,11 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.screen == screenCreateTextSecret ||
 		m.screen == screenCreateCredentialsSecret ||
 		m.screen == screenCreateCardSecret ||
+		m.screen == screenCreateBinarySecret ||
 		m.screen == screenUpdateTextSecret ||
 		m.screen == screenUpdateCredentialsSecret ||
-		m.screen == screenUpdateCardSecret {
+		m.screen == screenUpdateCardSecret ||
+		m.screen == screenUpdateBinarySecret {
 		var cmds []tea.Cmd
 
 		for i := range m.inputs {
@@ -518,12 +526,16 @@ func (m *Model) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd, bool) {
 				return m, m.runCreateCredentialsSecretCmd(), true
 			case screenCreateCardSecret:
 				return m, m.runCreateCardSecretCmd(), true
+			case screenCreateBinarySecret:
+				return m, m.runCreateBinarySecretCmd(), true
 			case screenUpdateTextSecret:
 				return m, m.runUpdateTextSecretCmd(), true
 			case screenUpdateCredentialsSecret:
 				return m, m.runUpdateCredentialsSecretCmd(), true
 			case screenUpdateCardSecret:
 				return m, m.runUpdateCardSecretCmd(), true
+			case screenUpdateBinarySecret:
+				return m, m.runUpdateBinarySecretCmd(), true
 			}
 		}
 
@@ -846,9 +858,30 @@ func (m *Model) initSecretEditForm() {
 		}
 		m.focusIndex = 0
 
+	case "binary":
+		m.screen = screenUpdateBinarySecret
+
+		metaInput := textinput.New()
+		metaInput.Placeholder = "Meta"
+		metaInput.SetValue(m.secretDetails.Meta)
+		metaInput.Focus()
+		metaInput.CharLimit = 256
+		metaInput.Width = 50
+
+		pathInput := textinput.New()
+		pathInput.Placeholder = "File path"
+		pathInput.CharLimit = 4096
+		pathInput.Width = 50
+
+		m.inputs = []textinput.Model{
+			metaInput,
+			pathInput,
+		}
+		m.focusIndex = 0
+
 	default:
 		m.screen = screenMessage
-		m.message = "Update is supported only for text, credentials and card right now"
+		m.message = "Update is supported only for text, credentials, card and binary right now"
 	}
 }
 
