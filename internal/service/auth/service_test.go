@@ -130,20 +130,20 @@ func TestService_Register_Success(t *testing.T) {
 	}
 }
 
-// TestService_Register_DuplicateUser проверяет ошибку повторной регистрации.
+// TestService_Register_DuplicateUser проверяет ошибку при попытке повторной регистрации.
 func TestService_Register_DuplicateUser(t *testing.T) {
 	ctx := context.Background()
 
 	users := &userRepositoryStub{
-		getByLoginFn: func(ctx context.Context, login string) (*domain.User, error) {
-			return &domain.User{
-				ID:    "user-1",
-				Login: "sergey",
-			}, nil
-		},
 		createFn: func(ctx context.Context, user *domain.User) error {
-			t.Fatal("Create should not be called for duplicate user")
-			return nil
+			if user == nil {
+				t.Fatal("expected non-nil user")
+			}
+			if user.Login != "sergey" {
+				t.Fatalf("unexpected login: got %q, want %q", user.Login, "sergey")
+			}
+
+			return domain.ErrUserAlreadyExists
 		},
 	}
 
