@@ -368,3 +368,62 @@ func mustNotCallListChangesSince(t *testing.T) func(ctx context.Context, ownerID
 		return nil, nil
 	}
 }
+
+// TestService_CreateCard_Success проверяет успешное создание секрета типа card.
+func TestService_CreateCard_Success(t *testing.T) {
+	now := time.Date(2026, 4, 20, 12, 45, 0, 0, time.UTC)
+
+	repo := &secretRepositoryStub{
+		createFn: func(ctx context.Context, item *domain.SecretItem) error {
+			data, ok := item.Data.(domain.CardData)
+			if !ok {
+				t.Fatalf("unexpected data type: %T", item.Data)
+			}
+
+			if data.Number != "4111111111111111" {
+				t.Fatalf("unexpected number: got %q, want %q", data.Number, "4111111111111111")
+			}
+			if data.Cardholder != "SERGEY DYUZHOV" {
+				t.Fatalf("unexpected cardholder: got %q, want %q", data.Cardholder, "SERGEY DYUZHOV")
+			}
+			if data.ExpiryMonth != 12 {
+				t.Fatalf("unexpected expiry month: got %d, want %d", data.ExpiryMonth, 12)
+			}
+			if data.ExpiryYear != 2030 {
+				t.Fatalf("unexpected expiry year: got %d, want %d", data.ExpiryYear, 2030)
+			}
+			if data.CVV != "123" {
+				t.Fatalf("unexpected cvv: got %q, want %q", data.CVV, "123")
+			}
+			if !item.CreatedAt.Equal(now) {
+				t.Fatalf("unexpected created_at: got %v, want %v", item.CreatedAt, now)
+			}
+
+			return nil
+		},
+		updateFn:           mustNotCallUpdate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+	svc.now = func() time.Time { return now }
+
+	_, err := svc.Create(context.Background(), CreateInput{
+		OwnerID: "user-1",
+		Type:    domain.SecretTypeCard,
+		Meta:    "main visa",
+		Data: domain.CardData{
+			Number:      "4111111111111111",
+			Cardholder:  "SERGEY DYUZHOV",
+			ExpiryMonth: 12,
+			ExpiryYear:  2030,
+			CVV:         "123",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+}
