@@ -636,3 +636,44 @@ func TestService_Update_InvalidSecretType(t *testing.T) {
 		t.Fatalf("unexpected error: got %v, want wrapped %v", err, domain.ErrInvalidSecretType)
 	}
 }
+
+// TestService_Update_RepositoryError проверяет ошибку при сохранении обновлённого секрета.
+func TestService_Update_RepositoryError(t *testing.T) {
+	expectedErr := errors.New("repository update failed")
+
+	repo := &secretRepositoryStub{
+		createFn: mustNotCallCreate(t),
+		getByIDFn: func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error) {
+			return &domain.SecretItem{
+				ID:      "secret-1",
+				OwnerID: "user-1",
+				Type:    domain.SecretTypeText,
+				Meta:    "old",
+				Data:    domain.TextData{Text: "old text"},
+				Version: 1,
+			}, nil
+		},
+		updateFn: func(ctx context.Context, item *domain.SecretItem) error {
+			return expectedErr
+		},
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	_, err := svc.Update(context.Background(), UpdateInput{
+		ID:      "secret-1",
+		OwnerID: "user-1",
+		Type:    domain.SecretTypeText,
+		Meta:    "new",
+		Data:    domain.TextData{Text: "new text"},
+	})
+	if err == nil {
+		t.Fatal("expected repository update error")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("unexpected error: got %v, want wrapped %v", err, expectedErr)
+	}
+}
