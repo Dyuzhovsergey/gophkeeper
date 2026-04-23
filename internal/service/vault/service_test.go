@@ -518,3 +518,52 @@ func TestService_GetByID_EmptyOwnerID(t *testing.T) {
 		t.Fatal("expected error for empty owner id")
 	}
 }
+
+// TestService_ListByOwner_Success проверяет успешное получение списка секретов пользователя.
+func TestService_ListByOwner_Success(t *testing.T) {
+	expected := []*domain.SecretItem{
+		{
+			ID:      "secret-1",
+			OwnerID: "user-1",
+			Type:    domain.SecretTypeText,
+			Meta:    "note",
+			Data:    domain.TextData{Text: "hello"},
+			Version: 1,
+		},
+		{
+			ID:      "secret-2",
+			OwnerID: "user-1",
+			Type:    domain.SecretTypeCredentials,
+			Meta:    "github",
+			Data: domain.CredentialData{
+				Login:    "sergey",
+				Password: "qwerty",
+			},
+			Version: 1,
+		},
+	}
+
+	repo := &secretRepositoryStub{
+		createFn:  mustNotCallCreate(t),
+		updateFn:  mustNotCallUpdate(t),
+		getByIDFn: mustNotCallGetByID(t),
+		listByOwnerFn: func(ctx context.Context, ownerID string) ([]*domain.SecretItem, error) {
+			if ownerID != "user-1" {
+				t.Fatalf("unexpected owner id: got %q, want %q", ownerID, "user-1")
+			}
+			return expected, nil
+		},
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	items, err := svc.ListByOwner(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("ListByOwner returned error: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("unexpected items len: got %d, want %d", len(items), 2)
+	}
+}
