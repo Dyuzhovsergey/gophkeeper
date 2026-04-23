@@ -118,5 +118,9 @@ func (c ServerConfig) Validate() error {
 		return fmt.Errorf("server jwt secret is empty")
 	}
 
+	if c.ShutdownTimeout <= 0 {
+		return fmt.Errorf("server shutdown timeout must be greater than zero")
+	}
+
 	return nil
 }
