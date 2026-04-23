@@ -22,112 +22,6 @@ GophKeeper — клиент-серверный менеджер приватны
 - JWT для авторизации
 - Bubble Tea для TUI-клиента
 
-## Структура проекта
-
-.
-├── bin
-│   ├── client
-│   └── server
-├── cmd
-│   ├── client
-│   │   └── main.go
-│   └── server
-│       └── main.go
-├── docs
-│   └── api-outline.md
-├── dsn.md
-├── go.mod
-├── go.sum
-├── internal
-│   ├── buildinfo
-│   │   ├── buildinfo.go
-│   │   └── buildinfo_test.go
-│   ├── cli
-│   │   ├── commands
-│   │   │   ├── root.go
-│   │   │   └── version.go
-│   │   ├── doc.go
-│   │   ├── model.go
-│   │   ├── model_test.go
-│   │   └── output
-│   ├── clientapi
-│   │   ├── auth.go
-│   │   ├── clientapi_test.go
-│   │   ├── client.go
-│   │   ├── doc.go
-│   │   └── secrets.go
-│   ├── config
-│   │   ├── client.go
-│   │   ├── common.go
-│   │   ├── config_test.go
-│   │   └── server.go
-│   ├── domain
-│   │   ├── auth.go
-│   │   ├── errors.go
-│   │   ├── secret.go
-│   │   └── user.go
-│   ├── logger
-│   │   ├── logger.go
-│   │   └── logger_test.go
-│   ├── repository
-│   │   ├── interfaces.go
-│   │   └── postgres
-│   │       ├── postgres.go
-│   │       ├── secrets.go
-│   │       ├── secrets_test.go
-│   │       ├── sessions.go
-│   │       ├── sessions_test.go
-│   │       ├── users.go
-│   │       └── users_test.go
-│   ├── security
-│   │   ├── bcrypt_test.go
-│   │   ├── jwt_test.go
-│   │   ├── password.go
-│   │   └── token.go
-│   ├── service
-│   │   ├── auth
-│   │   │   ├── doc.go
-│   │   │   ├── service.go
-│   │   │   └── service_test.go
-│   │   └── vault
-│   │       ├── doc.go
-│   │       ├── service.go
-│   │       └── service_test.go
-│   ├── storage
-│   │   └── local
-│   │       ├── doc.go
-│   │       ├── session.go
-│   │       ├── store.go
-│   │       └── store_test.go
-│   └── transport
-│       └── http
-│           ├── dto
-│           │   ├── auth.go
-│           │   └── secrets.go
-│           ├── handlers
-│           │   ├── auth.go
-│           │   ├── auth_test.go
-│           │   ├── health.go
-│           │   ├── secrets.go
-│           │   └── secrets_test.go
-│           ├── middleware
-│           │   ├── auth.go
-│           │   ├── auth_test.go
-│           │   ├── context.go
-│           │   └── doc.go
-│           ├── response
-│           │   ├── doc.go
-│           │   ├── response.go
-│           │   └── response_test.go
-│           ├── router.go
-│           └── router_test.go
-├── LICENSE
-├── Makefile
-├── migrations
-│   └── migrations.go
-└── README.md
-
-
 
 ## Сервер
 - регистрация пользователя;
@@ -148,14 +42,33 @@ GophKeeper — клиент-серверный менеджер приватны
 - просмотр одного секрета;
 - создание, обновление и удаление секретов;
 - работа с типами:
-- text
-- credentials
-- card
-- binary
+    - text
+    - credentials
+    - card
+    - binary
 
 ## Требования
 - Go 1.25.x
 - PostgreSQL
+
+## Подготовка PostgreSQL
+Нужно создать базу данных и пользователя, затем убедиться, что доступ по DSN работает.
+Пример DSN:
+
+```bash
+postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable
+```
+## Проверка подключения:
+```bash
+psql -h localhost -p 5432 -U user -d gophkeeper
+```
+
+## Конфигурация сервера
+
+Сервер читает конфигурацию из:
+- значений по умолчанию;
+- флагов;
+- переменных окружения.
 
 ## Основные переменные окружения
 - GOPHKEEPER_SERVER_RUN_ADDRESS
@@ -169,17 +82,7 @@ GophKeeper — клиент-серверный менеджер приватны
 -d           # PostgreSQL DSN
 -jwt-secret  # секрет подписи JWT
 
-## Подготовка PostgreSQL
-Нужно создать базу данных и пользователя, затем убедиться, что доступ по DSN работает.
-Пример DSN:
 
-```bash
-postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable
-```
-## Проверка подключения:
-```bash
-psql -h localhost -p 5432 -U user -d gophkeeper
-```
 
 ## Запуск сервера
 
@@ -194,9 +97,66 @@ go run ./cmd/server
 ```
 
 ## Пример через флаги:
-
+```bash
 go run ./cmd/server \
   -a localhost:8080 \
   -log-level debug \
   -d 'postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable' \
   -jwt-secret 'very-secret-key'
+  ```
+
+
+## Проверка health endpoint
+```bash
+curl -i http://localhost:8080/health
+```
+Ожидается HTTP 200.
+
+
+## Запуск клиента
+TUI-режим
+```bash
+go run ./cmd/client
+```
+
+## Режим CLI-команды
+```bash
+go run ./cmd/client version
+```
+```bash
+go run ./cmd/client register <login> <password>
+```
+```bash
+go run ./cmd/client login <login> <password>
+```
+```bash
+go run ./cmd/client logout
+```
+
+## Работа с клиентом
+Базовый сценарий нового пользователя
+
+1. Запустить сервер.
+2. Запустить клиент.
+3. Зарегистрироваться.
+4. Выполнить login.
+5. Добавить секреты через TUI.
+6. Открыть secrets и проверить список.
+6. Открыть нужный секрет и посмотреть детали.
+
+## Сборка
+Сервер
+```bash
+go build -o bin/server ./cmd/server
+```
+Клиент
+```bash
+go build -o bin/client ./cmd/client
+```
+
+## Тесты
+
+Запуск всех тестов:
+```bash
+go test ./...
+```
