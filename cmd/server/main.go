@@ -90,14 +90,47 @@ func run() error {
 		Handler: router,
 	}
 
+	serverErrCh := make(chan error, 1)
+
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrCh <- fmt.Errorf("listen and serve: %w", err)
+			return
+		}
+
+		serverErrCh <- nil
+	}()
+
 	log.Info(
 		"server starting",
 		zap.String("addr", cfg.RunAddress),
+		zap.Duration("shutdown_timeout", cfg.ShutdownTimeout),
 	)
 
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("listen and serve: %w", err)
-	}
+	select {
+	case err := <-serverErrCh:
+		if err != nil {
+			return err
+		}
 
-	return nil
+		return nil
+
+	case <-ctx.Done():
+		log.Info("shutdown signal received")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
+
+		if err := <-serverErrCh; err != nil {
+			return err
+		}
+
+		log.Info("server stopped gracefully")
+		return nil
+	}
 }
