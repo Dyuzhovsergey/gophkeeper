@@ -460,3 +460,42 @@ func TestService_CreateInvalidCard_ReturnsInvalidSecretData(t *testing.T) {
 		t.Fatalf("unexpected error: got %v, want wrapped %v", err, domain.ErrInvalidSecretData)
 	}
 }
+
+// TestService_GetByID_Success проверяет успешное получение секрета по идентификатору.
+func TestService_GetByID_Success(t *testing.T) {
+	expected := &domain.SecretItem{
+		ID:      "secret-1",
+		OwnerID: "user-1",
+		Type:    domain.SecretTypeText,
+		Meta:    "note",
+		Data:    domain.TextData{Text: "hello"},
+		Version: 1,
+	}
+
+	repo := &secretRepositoryStub{
+		createFn: mustNotCallCreate(t),
+		updateFn: mustNotCallUpdate(t),
+		getByIDFn: func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error) {
+			if ownerID != "user-1" {
+				t.Fatalf("unexpected owner id: got %q, want %q", ownerID, "user-1")
+			}
+			if secretID != "secret-1" {
+				t.Fatalf("unexpected secret id: got %q, want %q", secretID, "secret-1")
+			}
+			return expected, nil
+		},
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	item, err := svc.GetByID(context.Background(), "user-1", "secret-1")
+	if err != nil {
+		t.Fatalf("GetByID returned error: %v", err)
+	}
+	if item != expected {
+		t.Fatalf("unexpected item pointer: got %p, want %p", item, expected)
+	}
+}
