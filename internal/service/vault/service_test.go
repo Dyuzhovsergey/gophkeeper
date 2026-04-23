@@ -427,3 +427,36 @@ func TestService_CreateCard_Success(t *testing.T) {
 		t.Fatalf("Create returned error: %v", err)
 	}
 }
+
+// TestService_CreateInvalidCard_ReturnsInvalidSecretData проверяет ошибку валидации card payload.
+func TestService_CreateInvalidCard_ReturnsInvalidSecretData(t *testing.T) {
+	repo := &secretRepositoryStub{
+		createFn:           mustNotCallCreate(t),
+		updateFn:           mustNotCallUpdate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	_, err := svc.Create(context.Background(), CreateInput{
+		OwnerID: "user-1",
+		Type:    domain.SecretTypeCard,
+		Meta:    "broken card",
+		Data: domain.CardData{
+			Number:      "",
+			Cardholder:  "SERGEY DYUZHOV",
+			ExpiryMonth: 12,
+			ExpiryYear:  2030,
+			CVV:         "123",
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid card data")
+	}
+	if !errors.Is(err, domain.ErrInvalidSecretData) {
+		t.Fatalf("unexpected error: got %v, want wrapped %v", err, domain.ErrInvalidSecretData)
+	}
+}
