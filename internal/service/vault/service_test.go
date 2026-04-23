@@ -599,3 +599,40 @@ func TestService_Update_GetExistingError(t *testing.T) {
 		t.Fatalf("unexpected error: got %v, want wrapped %v", err, expectedErr)
 	}
 }
+
+// TestService_Update_InvalidSecretType проверяет ошибку при неподдерживаемом типе секрета.
+func TestService_Update_InvalidSecretType(t *testing.T) {
+	repo := &secretRepositoryStub{
+		createFn: mustNotCallCreate(t),
+		updateFn: mustNotCallUpdate(t),
+		getByIDFn: func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error) {
+			return &domain.SecretItem{
+				ID:      "secret-1",
+				OwnerID: "user-1",
+				Type:    domain.SecretTypeText,
+				Meta:    "old",
+				Data:    domain.TextData{Text: "old"},
+				Version: 1,
+			}, nil
+		},
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	_, err := svc.Update(context.Background(), UpdateInput{
+		ID:      "secret-1",
+		OwnerID: "user-1",
+		Type:    domain.SecretType("unsupported"),
+		Meta:    "new",
+		Data:    domain.TextData{Text: "hello"},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid secret type")
+	}
+	if !errors.Is(err, domain.ErrInvalidSecretType) {
+		t.Fatalf("unexpected error: got %v, want wrapped %v", err, domain.ErrInvalidSecretType)
+	}
+}
