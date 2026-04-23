@@ -499,3 +499,22 @@ func TestService_GetByID_Success(t *testing.T) {
 		t.Fatalf("unexpected item pointer: got %p, want %p", item, expected)
 	}
 }
+
+// TestService_GetByID_EmptyOwnerID проверяет ошибку при пустом ownerID.
+func TestService_GetByID_EmptyOwnerID(t *testing.T) {
+	repo := &secretRepositoryStub{
+		createFn:           mustNotCallCreate(t),
+		updateFn:           mustNotCallUpdate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	_, err := svc.GetByID(context.Background(), "", "secret-1")
+	if err == nil {
+		t.Fatal("expected error for empty owner id")
+	}
+}
