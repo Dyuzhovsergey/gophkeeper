@@ -175,23 +175,23 @@ GophKeeper — клиент-серверный менеджер приватны
 
 ```bash
 postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable
-
+```
 ## Проверка подключения:
-
+```bash
 psql -h localhost -p 5432 -U user -d gophkeeper
-
+```
 
 ## Запуск сервера
 
 Пример через переменные окружения:
-
+```bash
 export GOPHKEEPER_SERVER_RUN_ADDRESS=localhost:8080
 export GOPHKEEPER_SERVER_LOG_LEVEL=debug
 export GOPHKEEPER_SERVER_DATABASE_DSN='postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable'
 export GOPHKEEPER_SERVER_JWT_SECRET='very-secret-key'
 
 go run ./cmd/server
-
+```
 
 ## Пример через флаги:
 
