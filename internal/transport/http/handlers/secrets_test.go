@@ -453,3 +453,338 @@ func mustNotCallDelete(t *testing.T) func(ctx context.Context, ownerID, secretID
 		return nil
 	}
 }
+
+func TestSecretsHandler_CreateCard_Success(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn: func(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error) {
+			if input.OwnerID != "user-1" {
+				t.Fatalf("unexpected owner id: got %q, want %q", input.OwnerID, "user-1")
+			}
+			if input.Type != domain.SecretTypeCard {
+				t.Fatalf("unexpected secret type: got %q, want %q", input.Type, domain.SecretTypeCard)
+			}
+
+			data, ok := input.Data.(domain.CardData)
+			if !ok {
+				t.Fatalf("unexpected data type: %T", input.Data)
+			}
+			if data.Number != "4111111111111111" {
+				t.Fatalf("unexpected number: got %q, want %q", data.Number, "4111111111111111")
+			}
+
+			now := time.Date(2026, 4, 20, 10, 0, 0, 0, time.UTC)
+
+			return &domain.SecretItem{
+				ID:        "secret-card",
+				OwnerID:   input.OwnerID,
+				Type:      input.Type,
+				Meta:      input.Meta,
+				Data:      data,
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}, nil
+		},
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	body := []byte(`{
+		"type":"card",
+		"meta":"main visa",
+		"data":{
+			"number":"4111111111111111",
+			"cardholder":"SERGEY DYUZHOV",
+			"expiry_month":12,
+			"expiry_year":2030,
+			"cvv":"123"
+		}
+	}`)
+
+	req := authenticatedRequest(http.MethodPost, "/api/secrets", body)
+	rec := httptest.NewRecorder()
+
+	handler.Collection(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusCreated)
+	}
+}
+
+func TestSecretsHandler_Create_InvalidPayload(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	body := []byte(`{
+		"type":"binary",
+		"meta":"bad file",
+		"data":{
+			"filename":"hello.txt",
+			"mime_type":"text/plain",
+			"content_base64":"%%%INVALID%%%"
+		}
+	}`)
+
+	req := authenticatedRequest(http.MethodPost, "/api/secrets", body)
+	rec := httptest.NewRecorder()
+
+	handler.Collection(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSecretsHandler_Create_BinaryTooLarge(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn: func(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error) {
+			return nil, domain.ErrBinaryPayloadTooLarge
+		},
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	body := []byte(`{
+		"type":"binary",
+		"meta":"too large",
+		"data":{
+			"filename":"hello.txt",
+			"mime_type":"text/plain",
+			"content_base64":"aGVsbG8="
+		}
+	}`)
+
+	req := authenticatedRequest(http.MethodPost, "/api/secrets", body)
+	rec := httptest.NewRecorder()
+
+	handler.Collection(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestSecretsHandler_Create_IdentityMissing(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/secrets", bytes.NewReader([]byte(`{"type":"text","meta":"note","data":{"text":"hello"}}`)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.Collection(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestSecretsHandler_GetByID_Success(t *testing.T) {
+	now := time.Date(2026, 4, 20, 10, 0, 0, 0, time.UTC)
+
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn: mustNotCallCreate(t),
+		getByIDFn: func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error) {
+			if ownerID != "user-1" {
+				t.Fatalf("unexpected owner id: got %q, want %q", ownerID, "user-1")
+			}
+			if secretID != "secret-1" {
+				t.Fatalf("unexpected secret id: got %q, want %q", secretID, "secret-1")
+			}
+
+			return &domain.SecretItem{
+				ID:        "secret-1",
+				OwnerID:   ownerID,
+				Type:      domain.SecretTypeText,
+				Meta:      "note",
+				Data:      domain.TextData{Text: "hello"},
+				Version:   1,
+				CreatedAt: now,
+				UpdatedAt: now,
+			}, nil
+		},
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodGet, "/api/secrets/secret-1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestSecretsHandler_GetByID_IdentityMissing(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/secrets/secret-1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestSecretsHandler_Update_InvalidPayload(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	body := []byte(`{
+		"type":"binary",
+		"meta":"bad update",
+		"data":{
+			"filename":"hello.txt",
+			"mime_type":"text/plain",
+			"content_base64":"%%%INVALID%%%"
+		}
+	}`)
+
+	req := authenticatedRequest(http.MethodPut, "/api/secrets/secret-1", body)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSecretsHandler_Update_BinaryTooLarge(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn: func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error) {
+			return nil, domain.ErrBinaryPayloadTooLarge
+		},
+		deleteFn: mustNotCallDelete(t),
+	})
+
+	body := []byte(`{
+		"type":"binary",
+		"meta":"too large",
+		"data":{
+			"filename":"hello.txt",
+			"mime_type":"text/plain",
+			"content_base64":"aGVsbG8="
+		}
+	}`)
+
+	req := authenticatedRequest(http.MethodPut, "/api/secrets/secret-1", body)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestSecretsHandler_Delete_NotFound(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn: func(ctx context.Context, ownerID, secretID string) error {
+			return domain.ErrSecretNotFound
+		},
+	})
+
+	req := authenticatedRequest(http.MethodDelete, "/api/secrets/secret-1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestSecretsHandler_Collection_MethodNotAllowed(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodPatch, "/api/secrets", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Collection(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestSecretsHandler_Item_MethodNotAllowed(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodPatch, "/api/secrets/secret-1", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func TestSecretsHandler_Item_InvalidSecretID(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		updateFn:      mustNotCallUpdate(t),
+		deleteFn:      mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodGet, "/api/secrets/a/b", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Item(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
