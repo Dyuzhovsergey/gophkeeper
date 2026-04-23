@@ -567,3 +567,35 @@ func TestService_ListByOwner_Success(t *testing.T) {
 		t.Fatalf("unexpected items len: got %d, want %d", len(items), 2)
 	}
 }
+
+// TestService_Update_GetExistingError проверяет ошибку при чтении существующего секрета перед update.
+func TestService_Update_GetExistingError(t *testing.T) {
+	expectedErr := errors.New("repository get failed")
+
+	repo := &secretRepositoryStub{
+		createFn: mustNotCallCreate(t),
+		updateFn: mustNotCallUpdate(t),
+		getByIDFn: func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error) {
+			return nil, expectedErr
+		},
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		softDeleteFn:       mustNotCallDelete(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+	}
+
+	svc := NewService(repo)
+
+	_, err := svc.Update(context.Background(), UpdateInput{
+		ID:      "secret-1",
+		OwnerID: "user-1",
+		Type:    domain.SecretTypeText,
+		Meta:    "new",
+		Data:    domain.TextData{Text: "hello"},
+	})
+	if err == nil {
+		t.Fatal("expected error from repository GetByID")
+	}
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("unexpected error: got %v, want wrapped %v", err, expectedErr)
+	}
+}
