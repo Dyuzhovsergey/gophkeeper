@@ -41,11 +41,12 @@ func (s *routerAuthServiceStub) Authenticate(ctx context.Context, token string) 
 }
 
 type routerVaultServiceStub struct {
-	createFn      func(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error)
-	getByIDFn     func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error)
-	listByOwnerFn func(ctx context.Context, ownerID string) ([]*domain.SecretItem, error)
-	updateFn      func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error)
-	deleteFn      func(ctx context.Context, ownerID, secretID string) error
+	createFn           func(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error)
+	getByIDFn          func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error)
+	listByOwnerFn      func(ctx context.Context, ownerID string) ([]*domain.SecretItem, error)
+	listChangesSinceFn func(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error)
+	updateFn           func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error)
+	deleteFn           func(ctx context.Context, ownerID, secretID string) error
 }
 
 func (s *routerVaultServiceStub) Create(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error) {
@@ -67,6 +68,13 @@ func (s *routerVaultServiceStub) ListByOwner(ctx context.Context, ownerID string
 		return nil, nil
 	}
 	return s.listByOwnerFn(ctx, ownerID)
+}
+
+func (s *routerVaultServiceStub) ListChangesSince(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error) {
+	if s.listChangesSinceFn == nil {
+		return nil, nil
+	}
+	return s.listChangesSinceFn(ctx, ownerID, since)
 }
 
 func (s *routerVaultServiceStub) Update(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error) {
@@ -191,5 +199,106 @@ func TestNewRouter_SecretsRoute_WithAuth(t *testing.T) {
 	}
 	if resp.Items[0].ID != "secret-1" {
 		t.Fatalf("unexpected secret id: got %q, want %q", resp.Items[0].ID, "secret-1")
+	}
+}
+
+func TestNewRouter_SyncRoute_WithAuth(t *testing.T) {
+	now := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
+	since := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
+
+	authStub := &routerAuthServiceStub{
+		authenticateFn: func(ctx context.Context, token string) (*authservice.Identity, error) {
+			if token != "jwt-token" {
+				t.Fatalf("unexpected token: got %q, want %q", token, "jwt-token")
+			}
+			return &authservice.Identity{
+				UserID:    "user-1",
+				SessionID: "session-1",
+			}, nil
+		},
+	}
+
+	vaultStub := &routerVaultServiceStub{
+		listChangesSinceFn: func(ctx context.Context, ownerID string, gotSince time.Time) ([]*domain.SecretItem, error) {
+			if ownerID != "user-1" {
+				t.Fatalf("unexpected owner id: got %q, want %q", ownerID, "user-1")
+			}
+			if !gotSince.Equal(since) {
+				t.Fatalf("unexpected since: got %v, want %v", gotSince, since)
+			}
+
+			return []*domain.SecretItem{
+				{
+					ID:        "secret-1",
+					OwnerID:   "user-1",
+					Type:      domain.SecretTypeText,
+					Meta:      "note",
+					Data:      domain.TextData{Text: "hello"},
+					Version:   2,
+					CreatedAt: now.Add(-time.Hour),
+					UpdatedAt: now,
+				},
+			}, nil
+		},
+	}
+
+	router := NewRouter(authStub, vaultStub)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sync?since=2026-04-24T09:00:00Z", nil)
+	req.Header.Set("Authorization", "Bearer jwt-token")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp struct {
+		Items []struct {
+			ID string `json:"id"`
+		} `json:"items"`
+		Count int `json:"count"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+
+	if resp.Count != 1 {
+		t.Fatalf("unexpected count: got %d, want %d", resp.Count, 1)
+	}
+	if len(resp.Items) != 1 {
+		t.Fatalf("unexpected items len: got %d, want %d", len(resp.Items), 1)
+	}
+	if resp.Items[0].ID != "secret-1" {
+		t.Fatalf("unexpected secret id: got %q, want %q", resp.Items[0].ID, "secret-1")
+	}
+}
+
+func TestNewRouter_SyncRoute_RequiresAuth(t *testing.T) {
+	authStub := &routerAuthServiceStub{
+		authenticateFn: func(ctx context.Context, token string) (*authservice.Identity, error) {
+			t.Fatal("Authenticate should not be called without Authorization header")
+			return nil, nil
+		},
+	}
+
+	vaultStub := &routerVaultServiceStub{
+		listChangesSinceFn: func(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error) {
+			t.Fatal("ListChangesSince should not be called without auth")
+			return nil, nil
+		},
+	}
+
+	router := NewRouter(authStub, vaultStub)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sync?since=2026-04-24T09:00:00Z", nil)
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
 }

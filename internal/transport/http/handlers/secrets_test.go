@@ -16,11 +16,12 @@ import (
 )
 
 type vaultServiceStub struct {
-	createFn      func(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error)
-	getByIDFn     func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error)
-	listByOwnerFn func(ctx context.Context, ownerID string) ([]*domain.SecretItem, error)
-	updateFn      func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error)
-	deleteFn      func(ctx context.Context, ownerID, secretID string) error
+	createFn           func(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error)
+	getByIDFn          func(ctx context.Context, ownerID, secretID string) (*domain.SecretItem, error)
+	listByOwnerFn      func(ctx context.Context, ownerID string) ([]*domain.SecretItem, error)
+	listChangesSinceFn func(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error)
+	updateFn           func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error)
+	deleteFn           func(ctx context.Context, ownerID, secretID string) error
 }
 
 func (s *vaultServiceStub) Create(ctx context.Context, input vaultservice.CreateInput) (*domain.SecretItem, error) {
@@ -33,6 +34,13 @@ func (s *vaultServiceStub) GetByID(ctx context.Context, ownerID, secretID string
 
 func (s *vaultServiceStub) ListByOwner(ctx context.Context, ownerID string) ([]*domain.SecretItem, error) {
 	return s.listByOwnerFn(ctx, ownerID)
+}
+
+func (s *vaultServiceStub) ListChangesSince(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error) {
+	if s.listChangesSinceFn == nil {
+		return nil, nil
+	}
+	return s.listChangesSinceFn(ctx, ownerID, since)
 }
 
 func (s *vaultServiceStub) Update(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error) {
@@ -440,6 +448,13 @@ func mustNotCallListByOwner(t *testing.T) func(ctx context.Context, ownerID stri
 	}
 }
 
+func mustNotCallListChangesSince(t *testing.T) func(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error) {
+	return func(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error) {
+		t.Fatal("list changes since should not be called")
+		return nil, nil
+	}
+}
+
 func mustNotCallUpdate(t *testing.T) func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error) {
 	return func(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error) {
 		t.Fatal("update should not be called")
@@ -787,4 +802,172 @@ func TestSecretsHandler_Item_InvalidSecretID(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusNotFound)
 	}
+}
+
+func TestSecretsHandler_Sync_Success(t *testing.T) {
+	now := time.Date(2026, 4, 24, 10, 0, 0, 0, time.UTC)
+	since := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
+
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:      mustNotCallCreate(t),
+		getByIDFn:     mustNotCallGetByID(t),
+		listByOwnerFn: mustNotCallListByOwner(t),
+		listChangesSinceFn: func(ctx context.Context, ownerID string, gotSince time.Time) ([]*domain.SecretItem, error) {
+			if ownerID != "user-1" {
+				t.Fatalf("unexpected owner id: got %q, want %q", ownerID, "user-1")
+			}
+			if !gotSince.Equal(since) {
+				t.Fatalf("unexpected since: got %v, want %v", gotSince, since)
+			}
+
+			return []*domain.SecretItem{
+				{
+					ID:        "secret-1",
+					OwnerID:   "user-1",
+					Type:      domain.SecretTypeText,
+					Meta:      "note",
+					Data:      domain.TextData{Text: "hello"},
+					Version:   2,
+					CreatedAt: now.Add(-time.Hour),
+					UpdatedAt: now,
+				},
+				{
+					ID:        "secret-2",
+					OwnerID:   "user-1",
+					Type:      domain.SecretTypeText,
+					Meta:      "deleted note",
+					Data:      domain.TextData{Text: "bye"},
+					Version:   3,
+					CreatedAt: now.Add(-2 * time.Hour),
+					UpdatedAt: now,
+					DeletedAt: ptrTime(now),
+				},
+			}, nil
+		},
+		updateFn: mustNotCallUpdate(t),
+		deleteFn: mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodGet, "/api/sync?since=2026-04-24T09:00:00Z", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Sync(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var resp struct {
+		Items []struct {
+			ID        string     `json:"id"`
+			Type      string     `json:"type"`
+			DeletedAt *time.Time `json:"deleted_at"`
+		} `json:"items"`
+		ServerTime time.Time `json:"server_time"`
+		Count      int       `json:"count"`
+	}
+
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response body: %v", err)
+	}
+
+	if resp.Count != 2 {
+		t.Fatalf("unexpected count: got %d, want %d", resp.Count, 2)
+	}
+	if len(resp.Items) != 2 {
+		t.Fatalf("unexpected items len: got %d, want %d", len(resp.Items), 2)
+	}
+	if resp.Items[0].ID != "secret-1" {
+		t.Fatalf("unexpected first id: got %q, want %q", resp.Items[0].ID, "secret-1")
+	}
+	if resp.Items[1].DeletedAt == nil {
+		t.Fatal("expected deleted_at for deleted item")
+	}
+	if resp.ServerTime.IsZero() {
+		t.Fatal("expected non-zero server_time")
+	}
+}
+
+func TestSecretsHandler_Sync_MissingSince(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:           mustNotCallCreate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+		updateFn:           mustNotCallUpdate(t),
+		deleteFn:           mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodGet, "/api/sync", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Sync(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSecretsHandler_Sync_InvalidSince(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:           mustNotCallCreate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+		updateFn:           mustNotCallUpdate(t),
+		deleteFn:           mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodGet, "/api/sync?since=not-a-date", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Sync(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+}
+
+func TestSecretsHandler_Sync_IdentityMissing(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:           mustNotCallCreate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+		updateFn:           mustNotCallUpdate(t),
+		deleteFn:           mustNotCallDelete(t),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sync?since=2026-04-24T09:00:00Z", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Sync(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestSecretsHandler_Sync_MethodNotAllowed(t *testing.T) {
+	handler := NewSecretsHandler(&vaultServiceStub{
+		createFn:           mustNotCallCreate(t),
+		getByIDFn:          mustNotCallGetByID(t),
+		listByOwnerFn:      mustNotCallListByOwner(t),
+		listChangesSinceFn: mustNotCallListChangesSince(t),
+		updateFn:           mustNotCallUpdate(t),
+		deleteFn:           mustNotCallDelete(t),
+	})
+
+	req := authenticatedRequest(http.MethodPost, "/api/sync?since=2026-04-24T09:00:00Z", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Sync(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("unexpected status code: got %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+func ptrTime(value time.Time) *time.Time {
+	return &value
 }
