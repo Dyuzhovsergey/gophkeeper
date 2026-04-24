@@ -135,6 +135,21 @@ func (s *Service) ListByOwner(ctx context.Context, ownerID string) ([]*domain.Se
 	return items, nil
 }
 
+// ListChangesSince возвращает изменения пользователя после указанного времени.
+func (s *Service) ListChangesSince(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error) {
+	ownerID = strings.TrimSpace(ownerID)
+	if ownerID == "" {
+		return nil, fmt.Errorf("owner id is empty")
+	}
+
+	items, err := s.secrets.ListChangesSince(ctx, ownerID, since)
+	if err != nil {
+		return nil, fmt.Errorf("list secret changes since: %w", err)
+	}
+
+	return items, nil
+}
+
 // Update обновляет существующий секрет пользователя.
 func (s *Service) Update(ctx context.Context, input UpdateInput) (*domain.SecretItem, error) {
 	ownerID := strings.TrimSpace(input.OwnerID)
