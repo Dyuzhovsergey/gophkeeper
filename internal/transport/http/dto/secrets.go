@@ -91,3 +91,15 @@ type SecretListResponse struct {
 	// Items — список секретов пользователя.
 	Items []SecretResponse `json:"items"`
 }
+
+// SecretSyncResponse описывает ответ sync с изменениями после указанного времени.
+type SecretSyncResponse struct {
+	// Items — изменения пользователя после указанного времени.
+	Items []SecretResponse `json:"items"`
+
+	// ServerTime — текущее серверное время, которое клиент может сохранить как новый sync marker.
+	ServerTime time.Time `json:"server_time"`
+
+	// Count — количество изменений в ответе.
+	Count int `json:"count"`
+}

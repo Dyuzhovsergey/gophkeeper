@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/Dyuzhovsergey/gophkeeper/internal/domain"
 	vaultservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/vault"
@@ -26,6 +27,9 @@ type VaultService interface {
 
 	// ListByOwner возвращает список секретов пользователя.
 	ListByOwner(ctx context.Context, ownerID string) ([]*domain.SecretItem, error)
+
+	// ListChangesSince возвращает изменения пользователя после указанного времени.
+	ListChangesSince(ctx context.Context, ownerID string, since time.Time) ([]*domain.SecretItem, error)
 
 	// Update обновляет существующий секрет пользователя.
 	Update(ctx context.Context, input vaultservice.UpdateInput) (*domain.SecretItem, error)
@@ -56,6 +60,51 @@ func (h *SecretsHandler) Collection(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// Sync обрабатывает GET /api/sync?since=<RFC3339>
+// и возвращает изменения пользователя после указанного времени.
+func (h *SecretsHandler) Sync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	ownerID, ok := currentOwnerID(r.Context())
+	if !ok {
+		response.Error(w, http.StatusInternalServerError, "identity not found in context")
+		return
+	}
+
+	sinceRaw := strings.TrimSpace(r.URL.Query().Get("since"))
+	if sinceRaw == "" {
+		response.Error(w, http.StatusBadRequest, "since query parameter is required")
+		return
+	}
+
+	since, err := time.Parse(time.RFC3339, sinceRaw)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid since query parameter")
+		return
+	}
+
+	items, err := h.service.ListChangesSince(r.Context(), ownerID, since)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	resp := dto.SecretSyncResponse{
+		Items:      make([]dto.SecretResponse, 0, len(items)),
+		ServerTime: time.Now().UTC(),
+		Count:      len(items),
+	}
+
+	for _, item := range items {
+		resp.Items = append(resp.Items, secretToResponse(item))
+	}
+
+	response.JSON(w, http.StatusOK, resp)
 }
 
 // Item обрабатывает маршруты одного секрета:
