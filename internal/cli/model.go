@@ -37,6 +37,7 @@ type sessionStatusMsg struct {
 	userID          string
 	sessionID       string
 	expiresAt       time.Time
+	lastSyncAt      time.Time
 	status          string
 	showMessage     string
 }
