@@ -3,6 +3,7 @@ package clientapi
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 )
 
@@ -179,4 +180,33 @@ func (c *Client) DeleteSecret(ctx context.Context, token, secretID string) error
 	}
 
 	return nil
+}
+
+// normalizeSyncSince нормализует время sync-маркера.
+// Если время нулевое, возвращается Unix epoch, чтобы получить все изменения.
+func normalizeSyncSince(since time.Time) time.Time {
+	if since.IsZero() {
+		return time.Unix(0, 0).UTC()
+	}
+
+	return since.UTC()
+}
+
+// Sync получает изменения пользователя после указанного времени.
+func (c *Client) Sync(ctx context.Context, token string, since time.Time) (*SecretSyncResponse, error) {
+	var resp SecretSyncResponse
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + token,
+	}
+
+	since = normalizeSyncSince(since)
+
+	path := "/api/sync?since=" + url.QueryEscape(since.Format(time.RFC3339))
+
+	if err := c.doJSON(ctx, "GET", path, nil, &resp, headers); err != nil {
+		return nil, fmt.Errorf("sync request: %w", err)
+	}
+
+	return &resp, nil
 }
