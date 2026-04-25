@@ -169,3 +169,31 @@ func TestFileStore_ClearSession_NotFound(t *testing.T) {
 		t.Fatalf("ClearSession returned error: %v", err)
 	}
 }
+
+func TestFileStore_LoadLastSyncAt_Success(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.json")
+
+	store, err := NewFileStore(path)
+	if err != nil {
+		t.Fatalf("NewFileStore returned error: %v", err)
+	}
+
+	lastSyncAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
+
+	err = store.SaveSession(Session{
+		Token:      "jwt-token",
+		LastSyncAt: lastSyncAt,
+	})
+	if err != nil {
+		t.Fatalf("SaveSession returned error: %v", err)
+	}
+
+	got, err := store.LoadLastSyncAt()
+	if err != nil {
+		t.Fatalf("LoadLastSyncAt returned error: %v", err)
+	}
+
+	if !got.Equal(lastSyncAt) {
+		t.Fatalf("unexpected last_sync_at: got %v, want %v", got, lastSyncAt)
+	}
+}
