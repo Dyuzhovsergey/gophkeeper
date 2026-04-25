@@ -373,6 +373,7 @@ func secretToResponse(item *domain.SecretItem) dto.SecretResponse {
 		Version:   item.Version,
 		CreatedAt: item.CreatedAt,
 		UpdatedAt: item.UpdatedAt,
+		DeletedAt: item.DeletedAt,
 	}
 }
 
