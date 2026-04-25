@@ -133,6 +133,22 @@ func (s *FileStore) LoadLastSyncAt() (time.Time, error) {
 	return session.LastSyncAt, nil
 }
 
+// UpdateLastSyncAt обновляет время последней успешной синхронизации в локальной сессии.
+func (s *FileStore) UpdateLastSyncAt(lastSyncAt time.Time) error {
+	session, err := s.LoadSession()
+	if err != nil {
+		return err
+	}
+
+	session.LastSyncAt = lastSyncAt.UTC()
+
+	if err := s.SaveSession(*session); err != nil {
+		return fmt.Errorf("save local session with updated sync time: %w", err)
+	}
+
+	return nil
+}
+
 // ClearSession удаляет локально сохранённую сессию.
 func (s *FileStore) ClearSession() error {
 	if err := os.Remove(s.path); err != nil {
