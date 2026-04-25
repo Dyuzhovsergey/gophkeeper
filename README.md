@@ -98,6 +98,10 @@ export GOPHKEEPER_SERVER_RUN_ADDRESS=localhost:8080
 export GOPHKEEPER_SERVER_LOG_LEVEL=debug
 export GOPHKEEPER_SERVER_DATABASE_DSN='postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable'
 export GOPHKEEPER_SERVER_JWT_SECRET='very-secret-key'
+export GOPHKEEPER_SERVER_READ_HEADER_TIMEOUT=5s
+export GOPHKEEPER_SERVER_READ_TIMEOUT=30s
+export GOPHKEEPER_SERVER_WRITE_TIMEOUT=30s
+export GOPHKEEPER_SERVER_IDLE_TIMEOUT=60s
 
 go run ./cmd/server
 ```
@@ -108,7 +112,11 @@ go run ./cmd/server \
   -a localhost:8080 \
   -log-level debug \
   -d 'postgres://user:YOUR_PASSWORD@localhost:5432/gophkeeper?sslmode=disable' \
-  -jwt-secret 'very-secret-key'
+  -jwt-secret 'very-secret-key' \
+  -read-header-timeout 5s \
+  -read-timeout 30s \
+  -write-timeout 30s \
+  -idle-timeout 60s
   ```
 
 
