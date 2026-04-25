@@ -219,6 +219,26 @@ go build -o bin/server ./cmd/server
 go build -o bin/client ./cmd/client
 ```
 
+
+## Сборка под разные платформы
+
+### Linux
+```bash
+GOOS=linux GOARCH=amd64 go build -o bin/client-linux ./cmd/client
+GOOS=linux GOARCH=amd64 go build -o bin/server-linux ./cmd/server
+```
+
+Windows
+```bash
+GOOS=windows GOARCH=amd64 go build -o bin/client.exe ./cmd/client
+GOOS=windows GOARCH=amd64 go build -o bin/server.exe ./cmd/server
+```
+macOS
+```bash
+GOOS=darwin GOARCH=amd64 go build -o bin/client-macos ./cmd/client
+GOOS=darwin GOARCH=amd64 go build -o bin/server-macos ./cmd/server
+```
+
 ## Тесты
 
 Запуск всех тестов:
