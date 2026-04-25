@@ -86,8 +86,12 @@ func run() error {
 	router := httptransport.NewRouter(authSvc, vaultSvc)
 
 	srv := &http.Server{
-		Addr:    cfg.RunAddress,
-		Handler: router,
+		Addr:              cfg.RunAddress,
+		Handler:           router,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
 	}
 
 	serverErrCh := make(chan error, 1)
@@ -105,7 +109,10 @@ func run() error {
 	log.Info(
 		"server starting",
 		zap.String("addr", cfg.RunAddress),
-		zap.Duration("shutdown_timeout", cfg.ShutdownTimeout),
+		zap.Duration("read_header_timeout", cfg.ReadHeaderTimeout),
+		zap.Duration("read_timeout", cfg.ReadTimeout),
+		zap.Duration("write_timeout", cfg.WriteTimeout),
+		zap.Duration("idle_timeout", cfg.IdleTimeout),
 	)
 
 	select {
