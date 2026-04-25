@@ -52,6 +52,14 @@ type secretDetailsMsg struct {
 	item clientapi.SecretResponse
 }
 
+// syncResultMsg передаёт в модель результат синхронизации.
+type syncResultMsg struct {
+	serverTime   time.Time
+	changesCount int
+	deletedCount int
+	showMessage  string
+}
+
 // uiScreen описывает текущий экран TUI-клиента.
 type uiScreen int
 
@@ -79,6 +87,7 @@ var menuItems = []string{
 	"logout",
 	"me",
 	"secrets",
+	"sync",
 	"add text",
 	"add credentials",
 	"add card",
@@ -104,12 +113,13 @@ type Model struct {
 	busy       bool
 	message    string
 
-	hasLocalSession  bool
-	sessionValid     bool
-	sessionUserID    string
-	sessionSessionID string
-	sessionExpiresAt time.Time
-	sessionStatus    string
+	hasLocalSession   bool
+	sessionValid      bool
+	sessionUserID     string
+	sessionSessionID  string
+	sessionExpiresAt  time.Time
+	sessionLastSyncAt time.Time
+	sessionStatus     string
 
 	// secrets хранит последний загруженный список секретов.
 	secrets []clientapi.SecretResponse
@@ -283,6 +293,7 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessionUserID = msg.userID
 		m.sessionSessionID = msg.sessionID
 		m.sessionExpiresAt = msg.expiresAt
+		m.sessionLastSyncAt = msg.lastSyncAt
 		m.sessionStatus = msg.status
 
 		if msg.showMessage != "" {
@@ -304,6 +315,13 @@ func (m *Model) updateTUIMode(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.busy = false
 		m.screen = screenSecretDetails
 		m.secretDetails = &msg.item
+		return m, nil
+
+	case syncResultMsg:
+		m.busy = false
+		m.sessionLastSyncAt = msg.serverTime
+		m.screen = screenMessage
+		m.message = msg.showMessage
 		return m, nil
 
 	case tea.KeyMsg:
@@ -576,6 +594,10 @@ func (m *Model) selectMenuItem() (tea.Model, tea.Cmd) {
 	case "secrets":
 		m.busy = true
 		return m, m.runListSecretsCmd()
+
+	case "sync":
+		m.busy = true
+		return m, m.runSyncCmd()
 
 	case "add text":
 		m.initSecretForm(screenCreateTextSecret)
@@ -1101,12 +1123,36 @@ func (m *Model) currentSessionStatusLine() string {
 		expiresAt = m.sessionExpiresAt.Format(time.RFC3339)
 	}
 
+	lastSyncAt := ""
+	if !m.sessionLastSyncAt.IsZero() {
+		lastSyncAt = m.sessionLastSyncAt.Format(time.RFC3339)
+	}
+
+	if expiresAt != "" && lastSyncAt != "" {
+		return fmt.Sprintf(
+			"Logged in as %s (session=%s, expires=%s, last_sync=%s)",
+			m.sessionUserID,
+			m.sessionSessionID,
+			expiresAt,
+			lastSyncAt,
+		)
+	}
+
 	if expiresAt != "" {
 		return fmt.Sprintf(
 			"Logged in as %s (session=%s, expires=%s)",
 			m.sessionUserID,
 			m.sessionSessionID,
 			expiresAt,
+		)
+	}
+
+	if lastSyncAt != "" {
+		return fmt.Sprintf(
+			"Logged in as %s (session=%s, last_sync=%s)",
+			m.sessionUserID,
+			m.sessionSessionID,
+			lastSyncAt,
 		)
 	}
 
@@ -1229,10 +1275,11 @@ func (m *Model) runLoginCmd() tea.Cmd {
 		}
 
 		session := local.Session{
-			Token:     resp.Token,
-			UserID:    meResp.UserID,
-			SessionID: meResp.SessionID,
-			ExpiresAt: expiresAt,
+			Token:      resp.Token,
+			UserID:     meResp.UserID,
+			SessionID:  meResp.SessionID,
+			ExpiresAt:  expiresAt,
+			LastSyncAt: time.Time{},
 		}
 
 		if err := m.store.SaveSession(session); err != nil {
@@ -1245,6 +1292,7 @@ func (m *Model) runLoginCmd() tea.Cmd {
 			userID:          meResp.UserID,
 			sessionID:       meResp.SessionID,
 			expiresAt:       expiresAt,
+			lastSyncAt:      session.LastSyncAt,
 			status:          "Active local session",
 			showMessage: fmt.Sprintf(
 				"Login successful: user_id=%s session_id=%s",
@@ -1277,6 +1325,7 @@ func (m *Model) loadSessionStatusCmd() tea.Cmd {
 				hasLocalSession: true,
 				sessionValid:    false,
 				expiresAt:       session.ExpiresAt,
+				lastSyncAt:      session.LastSyncAt,
 				status:          "Local session found, but token is invalid on server",
 			}
 		}
@@ -1287,6 +1336,7 @@ func (m *Model) loadSessionStatusCmd() tea.Cmd {
 			userID:          meResp.UserID,
 			sessionID:       meResp.SessionID,
 			expiresAt:       session.ExpiresAt,
+			lastSyncAt:      session.LastSyncAt,
 			status:          "Active local session",
 		}
 	}
@@ -1737,6 +1787,56 @@ func (m *Model) runDeleteSecretCmd(secretID string) tea.Cmd {
 	}
 }
 
+// runSyncCmd выполняет синхронизацию клиента с сервером.
+func (m *Model) runSyncCmd() tea.Cmd {
+	return func() tea.Msg {
+		session, err := m.store.LoadSession()
+		if err != nil {
+			if errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("no active local session")}
+			}
+
+			return actionErrorMsg{err: fmt.Errorf("load local session: %w", err)}
+		}
+
+		lastSyncAt, err := m.store.LoadLastSyncAt()
+		if err != nil {
+			if !errors.Is(err, local.ErrSessionNotFound) {
+				return actionErrorMsg{err: fmt.Errorf("load last sync time: %w", err)}
+			}
+			lastSyncAt = time.Time{}
+		}
+
+		resp, err := m.api.Sync(context.Background(), session.Token, lastSyncAt)
+		if err != nil {
+			return actionErrorMsg{err: err}
+		}
+
+		if err := m.store.UpdateLastSyncAt(resp.ServerTime); err != nil {
+			return actionErrorMsg{err: fmt.Errorf("update last sync time: %w", err)}
+		}
+
+		deletedCount := 0
+		for _, item := range resp.Items {
+			if item.DeletedAt != nil {
+				deletedCount++
+			}
+		}
+
+		return syncResultMsg{
+			serverTime:   resp.ServerTime,
+			changesCount: len(resp.Items),
+			deletedCount: deletedCount,
+			showMessage: fmt.Sprintf(
+				"sync completed: changes=%d deleted=%d server_time=%s",
+				len(resp.Items),
+				deletedCount,
+				resp.ServerTime.Format(time.RFC3339),
+			),
+		}
+	}
+}
+
 // runLogoutCmd очищает локальную сессию пользователя.
 func (m *Model) runLogoutCmd() tea.Cmd {
 	return func() tea.Msg {
@@ -1749,11 +1849,13 @@ func (m *Model) runLogoutCmd() tea.Cmd {
 		m.secretDetails = nil
 		m.editingSecretID = ""
 		m.deletingSecretID = ""
+		m.sessionLastSyncAt = time.Time{}
 
 		return sessionStatusMsg{
 			hasLocalSession: false,
 			sessionValid:    false,
 			status:          "No active local session",
+			lastSyncAt:      time.Time{},
 			showMessage:     "Logout successful",
 		}
 	}
@@ -1830,6 +1932,47 @@ func (m *Model) execute(ctx context.Context) (string, error) {
 		}
 
 		return "logout successful", nil
+
+	case "sync":
+		if len(m.args) != 1 {
+			return "", fmt.Errorf("usage: client sync")
+		}
+
+		session, err := m.store.LoadSession()
+		if err != nil {
+			return "", fmt.Errorf("load local session: %w", err)
+		}
+
+		lastSyncAt, err := m.store.LoadLastSyncAt()
+		if err != nil {
+			if !errors.Is(err, local.ErrSessionNotFound) {
+				return "", fmt.Errorf("load last sync time: %w", err)
+			}
+			lastSyncAt = time.Time{}
+		}
+
+		resp, err := m.api.Sync(ctx, session.Token, lastSyncAt)
+		if err != nil {
+			return "", err
+		}
+
+		if err := m.store.UpdateLastSyncAt(resp.ServerTime); err != nil {
+			return "", fmt.Errorf("update last sync time: %w", err)
+		}
+
+		deletedCount := 0
+		for _, item := range resp.Items {
+			if item.DeletedAt != nil {
+				deletedCount++
+			}
+		}
+
+		return fmt.Sprintf(
+			"sync completed: changes=%d deleted=%d server_time=%s",
+			len(resp.Items),
+			deletedCount,
+			resp.ServerTime.Format(time.RFC3339),
+		), nil
 
 	default:
 		return "", fmt.Errorf("unknown client command: %s", m.args[0])
