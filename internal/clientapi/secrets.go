@@ -86,7 +86,7 @@ type SecretResponse struct {
 	// UpdatedAt — время последнего изменения.
 	UpdatedAt string `json:"updated_at"`
 
-	// DeletedAt — время мягкого удаления секрета, если секрет удалён.
+	// DeletedAt — время мягкого удаления секрета, если он удалён.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
