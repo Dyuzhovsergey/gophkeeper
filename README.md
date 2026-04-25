@@ -82,12 +82,18 @@ psql -h localhost -p 5432 -U user -d gophkeeper
 - GOPHKEEPER_SERVER_DATABASE_DSN
 - GOPHKEEPER_SERVER_JWT_SECRET
 
+
 ## Основные флаги
 -a           # адрес запуска HTTP-сервера
 -log-level   # уровень логирования
 -d           # PostgreSQL DSN
 -jwt-secret  # секрет подписи JWT
 
+##  Таймауты
+1. ReadHeaderTimeout - сколько сервер ждёт, пока клиент пришлёт только HTTP-заголовки.
+2. ReadTimeout - сколько сервер ждёт, пока клиент пришлёт весь запрос целиком: заголовки + body
+3.  WriteTimeout - сколько сервер готов ждать, пока ответ будет отправлен клиенту.
+4.  IdleTimeout - сколько keep-alive соединение может просто стоять без дела между запросами
 
 
 ## Запуск сервера
