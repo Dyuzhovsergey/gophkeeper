@@ -3,6 +3,7 @@ package clientapi
 import (
 	"context"
 	"fmt"
+	"time"
 )
 
 // SecretUpsertRequest описывает клиентский запрос на создание секрета.
@@ -84,12 +85,27 @@ type SecretResponse struct {
 
 	// UpdatedAt — время последнего изменения.
 	UpdatedAt string `json:"updated_at"`
+
+	// DeletedAt — время мягкого удаления секрета, если секрет удалён.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 // SecretListResponse описывает ответ со списком секретов.
 type SecretListResponse struct {
 	// Items — список секретов пользователя.
 	Items []SecretResponse `json:"items"`
+}
+
+// SecretSyncResponse описывает ответ sync с изменениями после указанного времени.
+type SecretSyncResponse struct {
+	// Items — изменения пользователя после указанного времени.
+	Items []SecretResponse `json:"items"`
+
+	// ServerTime — серверное время, которое клиент может сохранить как новый sync marker.
+	ServerTime time.Time `json:"server_time"`
+
+	// Count — количество изменений в ответе.
+	Count int `json:"count"`
 }
 
 // ListSecrets получает список секретов текущего пользователя.
