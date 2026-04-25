@@ -228,3 +228,17 @@ func TestFileStore_UpdateLastSyncAt_Success(t *testing.T) {
 		t.Fatalf("unexpected last_sync_at: got %v, want %v", session.LastSyncAt, lastSyncAt)
 	}
 }
+
+func TestFileStore_LoadLastSyncAt_NotFound(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing-session.json")
+
+	store, err := NewFileStore(path)
+	if err != nil {
+		t.Fatalf("NewFileStore returned error: %v", err)
+	}
+
+	_, err = store.LoadLastSyncAt()
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("unexpected error: got %v, want wrapped %v", err, ErrSessionNotFound)
+	}
+}
