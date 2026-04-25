@@ -19,6 +19,9 @@ type Session struct {
 
 	// ExpiresAt — срок действия токена.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
+
+	// LastSyncAt — время последней успешной синхронизации клиента с сервером.
+	LastSyncAt time.Time `json:"last_sync_at,omitempty"`
 }
 
 // Validate проверяет корректность локальной сессии.
