@@ -89,7 +89,7 @@ psql -h localhost -p 5432 -U user -d gophkeeper
 -d           # PostgreSQL DSN
 -jwt-secret  # секрет подписи JWT
 
-##  Таймауты
+## HTTP таймауты
 1. ReadHeaderTimeout - сколько сервер ждёт, пока клиент пришлёт только HTTP-заголовки.
 2. ReadTimeout - сколько сервер ждёт, пока клиент пришлёт весь запрос целиком: заголовки + body
 3.  WriteTimeout - сколько сервер готов ждать, пока ответ будет отправлен клиенту.
