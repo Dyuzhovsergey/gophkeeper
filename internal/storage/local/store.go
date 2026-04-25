@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -120,6 +121,16 @@ func (s *FileStore) LoadSession() (*Session, error) {
 	}
 
 	return &session, nil
+}
+
+// LoadLastSyncAt возвращает время последней успешной синхронизации из локальной сессии.
+func (s *FileStore) LoadLastSyncAt() (time.Time, error) {
+	session, err := s.LoadSession()
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return session.LastSyncAt, nil
 }
 
 // ClearSession удаляет локально сохранённую сессию.
