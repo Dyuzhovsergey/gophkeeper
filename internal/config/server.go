@@ -11,14 +11,20 @@ import (
 )
 
 const (
-	defaultServerRunAddress      = "localhost:8080"
-	defaultServerShutdownTimeout = 5 * time.Second
+	defaultServerRunAddress  = "localhost:8080"
+	defaultReadHeaderTimeout = 5 * time.Second
+	defaultReadTimeout       = 30 * time.Second
+	defaultWriteTimeout      = 30 * time.Second
+	defaultIdleTimeout       = 60 * time.Second
 
-	envServerRunAddress      = "GOPHKEEPER_SERVER_RUN_ADDRESS"
-	envServerLogLevel        = "GOPHKEEPER_SERVER_LOG_LEVEL"
-	envServerDatabaseDSN     = "GOPHKEEPER_SERVER_DATABASE_DSN"
-	envServerJWTSecret       = "GOPHKEEPER_SERVER_JWT_SECRET"
-	envServerShutdownTimeout = "GOPHKEEPER_SERVER_SHUTDOWN_TIMEOUT"
+	envServerRunAddress        = "GOPHKEEPER_SERVER_RUN_ADDRESS"
+	envServerLogLevel          = "GOPHKEEPER_SERVER_LOG_LEVEL"
+	envServerDatabaseDSN       = "GOPHKEEPER_SERVER_DATABASE_DSN"
+	envServerJWTSecret         = "GOPHKEEPER_SERVER_JWT_SECRET"
+	envServerReadHeaderTimeout = "GOPHKEEPER_SERVER_READ_HEADER_TIMEOUT"
+	envServerReadTimeout       = "GOPHKEEPER_SERVER_READ_TIMEOUT"
+	envServerWriteTimeout      = "GOPHKEEPER_SERVER_WRITE_TIMEOUT"
+	envServerIdleTimeout       = "GOPHKEEPER_SERVER_IDLE_TIMEOUT"
 )
 
 // ServerConfig описывает конфигурацию серверного приложения.
@@ -35,18 +41,34 @@ type ServerConfig struct {
 	// JWTSecret — секрет подписи JWT.
 	JWTSecret string
 
+	// ReadHeaderTimeout — максимальное время чтения HTTP-заголовков.
+	ReadHeaderTimeout time.Duration
+
+	// ReadTimeout — максимальное время чтения всего HTTP-запроса.
+	ReadTimeout time.Duration
+
+	// WriteTimeout — максимальное время записи HTTP-ответа.
+	WriteTimeout time.Duration
+
+	// IdleTimeout — максимальное время ожидания следующего запроса в keep-alive соединении.
+	IdleTimeout time.Duration
+
 	// ShutdownTimeout — максимальное время на корректное завершение HTTP-сервера.
 	ShutdownTimeout time.Duration
 }
 
 // DefaultServerConfig возвращает серверную конфигурацию по умолчанию.
+
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		RunAddress:      defaultServerRunAddress,
-		LogLevel:        defaultLogLevel,
-		DatabaseDSN:     "",
-		JWTSecret:       "",
-		ShutdownTimeout: defaultServerShutdownTimeout,
+		RunAddress:        defaultServerRunAddress,
+		LogLevel:          defaultLogLevel,
+		DatabaseDSN:       "",
+		JWTSecret:         "",
+		ReadHeaderTimeout: defaultReadHeaderTimeout,
+		ReadTimeout:       defaultReadTimeout,
+		WriteTimeout:      defaultWriteTimeout,
+		IdleTimeout:       defaultIdleTimeout,
 	}
 }
 
@@ -66,6 +88,10 @@ func LoadServer(args []string) (ServerConfig, error) {
 	fs.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "logger level")
 	fs.StringVar(&cfg.DatabaseDSN, "d", cfg.DatabaseDSN, "PostgreSQL DSN")
 	fs.StringVar(&cfg.JWTSecret, "jwt-secret", cfg.JWTSecret, "JWT signing secret")
+	fs.DurationVar(&cfg.ReadHeaderTimeout, "read-header-timeout", cfg.ReadHeaderTimeout, "HTTP read header timeout")
+	fs.DurationVar(&cfg.ReadTimeout, "read-timeout", cfg.ReadTimeout, "HTTP read timeout")
+	fs.DurationVar(&cfg.WriteTimeout, "write-timeout", cfg.WriteTimeout, "HTTP write timeout")
+	fs.DurationVar(&cfg.IdleTimeout, "idle-timeout", cfg.IdleTimeout, "HTTP idle timeout")
 	fs.DurationVar(&cfg.ShutdownTimeout, "shutdown-timeout", cfg.ShutdownTimeout, "graceful shutdown timeout")
 
 	if err := fs.Parse(args); err != nil {
@@ -77,14 +103,47 @@ func LoadServer(args []string) (ServerConfig, error) {
 	applyStringEnv(&cfg.DatabaseDSN, envServerDatabaseDSN)
 	applyStringEnv(&cfg.JWTSecret, envServerJWTSecret)
 
-	if raw, ok := os.LookupEnv(envServerShutdownTimeout); ok {
+	if raw, ok := os.LookupEnv(envServerReadHeaderTimeout); ok {
 		raw = strings.TrimSpace(raw)
 		if raw != "" {
-			timeout, err := time.ParseDuration(raw)
+			value, err := time.ParseDuration(raw)
 			if err != nil {
-				return ServerConfig{}, fmt.Errorf("parse server shutdown timeout: %w", err)
+				return ServerConfig{}, fmt.Errorf("parse read header timeout: %w", err)
 			}
-			cfg.ShutdownTimeout = timeout
+			cfg.ReadHeaderTimeout = value
+		}
+	}
+
+	if raw, ok := os.LookupEnv(envServerReadTimeout); ok {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			value, err := time.ParseDuration(raw)
+			if err != nil {
+				return ServerConfig{}, fmt.Errorf("parse read timeout: %w", err)
+			}
+			cfg.ReadTimeout = value
+		}
+	}
+
+	if raw, ok := os.LookupEnv(envServerWriteTimeout); ok {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			value, err := time.ParseDuration(raw)
+			if err != nil {
+				return ServerConfig{}, fmt.Errorf("parse write timeout: %w", err)
+			}
+			cfg.WriteTimeout = value
+		}
+	}
+
+	if raw, ok := os.LookupEnv(envServerIdleTimeout); ok {
+		raw = strings.TrimSpace(raw)
+		if raw != "" {
+			value, err := time.ParseDuration(raw)
+			if err != nil {
+				return ServerConfig{}, fmt.Errorf("parse idle timeout: %w", err)
+			}
+			cfg.IdleTimeout = value
 		}
 	}
 
@@ -120,6 +179,22 @@ func (c ServerConfig) Validate() error {
 
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("server shutdown timeout must be greater than zero")
+	}
+
+	if c.ReadHeaderTimeout <= 0 {
+		return fmt.Errorf("server read header timeout must be greater than zero")
+	}
+
+	if c.ReadTimeout <= 0 {
+		return fmt.Errorf("server read timeout must be greater than zero")
+	}
+
+	if c.WriteTimeout <= 0 {
+		return fmt.Errorf("server write timeout must be greater than zero")
+	}
+
+	if c.IdleTimeout <= 0 {
+		return fmt.Errorf("server idle timeout must be greater than zero")
 	}
 
 	return nil
