@@ -63,7 +63,6 @@ func TestFileStore_SaveAndLoadSession(t *testing.T) {
 	}
 
 	expiresAt := time.Date(2026, 4, 25, 10, 0, 0, 0, time.UTC)
-
 	lastSyncAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
 
 	want := Session{
@@ -98,6 +97,9 @@ func TestFileStore_SaveAndLoadSession(t *testing.T) {
 	}
 	if !got.ExpiresAt.Equal(want.ExpiresAt) {
 		t.Fatalf("unexpected expires_at: got %v, want %v", got.ExpiresAt, want.ExpiresAt)
+	}
+	if !got.LastSyncAt.Equal(want.LastSyncAt) {
+		t.Fatalf("unexpected last_sync_at: got %v, want %v", got.LastSyncAt, want.LastSyncAt)
 	}
 }
 
