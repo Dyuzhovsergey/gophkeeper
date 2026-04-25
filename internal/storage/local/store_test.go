@@ -64,11 +64,14 @@ func TestFileStore_SaveAndLoadSession(t *testing.T) {
 
 	expiresAt := time.Date(2026, 4, 25, 10, 0, 0, 0, time.UTC)
 
+	lastSyncAt := time.Date(2026, 4, 24, 9, 0, 0, 0, time.UTC)
+
 	want := Session{
-		Token:     "jwt-token",
-		UserID:    "user-1",
-		SessionID: "session-1",
-		ExpiresAt: expiresAt,
+		Token:      "jwt-token",
+		UserID:     "user-1",
+		SessionID:  "session-1",
+		ExpiresAt:  expiresAt,
+		LastSyncAt: lastSyncAt,
 	}
 
 	if err := store.SaveSession(want); err != nil {
