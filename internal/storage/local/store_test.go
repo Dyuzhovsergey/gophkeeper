@@ -197,3 +197,34 @@ func TestFileStore_LoadLastSyncAt_Success(t *testing.T) {
 		t.Fatalf("unexpected last_sync_at: got %v, want %v", got, lastSyncAt)
 	}
 }
+
+func TestFileStore_UpdateLastSyncAt_Success(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "session.json")
+
+	store, err := NewFileStore(path)
+	if err != nil {
+		t.Fatalf("NewFileStore returned error: %v", err)
+	}
+
+	err = store.SaveSession(Session{
+		Token: "jwt-token",
+	})
+	if err != nil {
+		t.Fatalf("SaveSession returned error: %v", err)
+	}
+
+	lastSyncAt := time.Date(2026, 4, 24, 10, 30, 0, 0, time.UTC)
+
+	if err := store.UpdateLastSyncAt(lastSyncAt); err != nil {
+		t.Fatalf("UpdateLastSyncAt returned error: %v", err)
+	}
+
+	session, err := store.LoadSession()
+	if err != nil {
+		t.Fatalf("LoadSession returned error: %v", err)
+	}
+
+	if !session.LastSyncAt.Equal(lastSyncAt) {
+		t.Fatalf("unexpected last_sync_at: got %v, want %v", session.LastSyncAt, lastSyncAt)
+	}
+}
