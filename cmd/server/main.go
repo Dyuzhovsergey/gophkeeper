@@ -1,0 +1,143 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/Dyuzhovsergey/gophkeeper/internal/config"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/logger"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/repository/postgres"
+	"github.com/Dyuzhovsergey/gophkeeper/internal/security"
+	authservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/auth"
+	vaultservice "github.com/Dyuzhovsergey/gophkeeper/internal/service/vault"
+	httptransport "github.com/Dyuzhovsergey/gophkeeper/internal/transport/http"
+	"github.com/Dyuzhovsergey/gophkeeper/migrations"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"go.uber.org/zap"
+)
+
+func main() {
+	if err := run(); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cfg, err := config.LoadServer(os.Args[1:])
+	if err != nil {
+		return fmt.Errorf("load server config: %w", err)
+	}
+
+	log, err := logger.Init(cfg.LogLevel)
+	if err != nil {
+		return fmt.Errorf("init logger: %w", err)
+	}
+	defer func() {
+		_ = log.Sync()
+	}()
+
+	db, err := sql.Open("pgx", cfg.DatabaseDSN)
+	if err != nil {
+		return fmt.Errorf("open postgres connection: %w", err)
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	if err := db.PingContext(ctx); err != nil {
+		return fmt.Errorf("ping postgres: %w", err)
+	}
+
+	log.Info("postgres connected")
+
+	if err := migrations.Run(ctx, db); err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
+
+	log.Info("migrations applied")
+	usersRepo := postgres.NewUsersRepository(db)
+	sessionsRepo := postgres.NewSessionsRepository(db)
+
+	passwordManager := security.NewBcryptManager(0)
+	tokenManager := security.NewJWTManager(cfg.JWTSecret)
+
+	authSvc := authservice.NewService(
+		usersRepo,
+		sessionsRepo,
+		passwordManager,
+		tokenManager,
+		0,
+	)
+
+	secretsRepo := postgres.NewSecretsRepository(db)
+
+	vaultSvc := vaultservice.NewService(secretsRepo)
+
+	router := httptransport.NewRouter(authSvc, vaultSvc)
+
+	srv := &http.Server{
+		Addr:              cfg.RunAddress,
+		Handler:           router,
+		ReadHeaderTimeout: cfg.ReadHeaderTimeout,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+	}
+
+	serverErrCh := make(chan error, 1)
+
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrCh <- fmt.Errorf("listen and serve: %w", err)
+			return
+		}
+
+		serverErrCh <- nil
+	}()
+
+	log.Info(
+		"server starting",
+		zap.String("addr", cfg.RunAddress),
+		zap.Duration("read_header_timeout", cfg.ReadHeaderTimeout),
+		zap.Duration("read_timeout", cfg.ReadTimeout),
+		zap.Duration("write_timeout", cfg.WriteTimeout),
+		zap.Duration("idle_timeout", cfg.IdleTimeout),
+	)
+
+	select {
+	case err := <-serverErrCh:
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	case <-ctx.Done():
+		log.Info("shutdown signal received")
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown server: %w", err)
+		}
+
+		if err := <-serverErrCh; err != nil {
+			return err
+		}
+
+		log.Info("server stopped gracefully")
+		return nil
+	}
+}
